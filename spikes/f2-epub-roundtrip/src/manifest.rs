@@ -46,6 +46,10 @@ pub struct Record {
     pub entry_count: usize,
     /// Every divergence observed.
     pub divergences: Vec<Divergence>,
+    /// What the reader did when pointed at this book. `None` when the file was
+    /// only scanned, not round-tripped.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<crate::roundtrip::Outcome>,
     /// The instrument that produced this record (ADR-F041).
     pub classifier_version: String,
 }
@@ -71,7 +75,14 @@ impl Record {
     }
 
     /// Whether this book round-tripped losslessly in the sense ADR-F012 means.
+    ///
+    /// A reader that could not open, write, or survive the file is not lossless
+    /// — it produced nothing to compare. Scoring an absent output as "no
+    /// divergence found" is the standing review question's exact failure.
     pub fn lossless(&self) -> bool {
+        if self.outcome.as_ref().is_some_and(|o| !o.produced_output()) {
+            return false;
+        }
         !self
             .divergences
             .iter()

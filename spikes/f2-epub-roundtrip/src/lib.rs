@@ -25,5 +25,7 @@ pub mod fixtures;
 pub mod manifest;
 pub mod normalization;
 pub mod producer;
+pub mod roundtrip;
 pub mod taxonomy;
+pub mod verdict;
 pub mod xmlcmp;

@@ -10,15 +10,13 @@ Phase 0 spike. Spec 00 §10, R5, ADR-F011, ADR-F012.
 > Does `rbook` (or a `quick-xml` build) round-trip real EPUBs when nothing is
 > edited, **preserving every byte of every archive entry**?
 
-This directory holds the instrument, not yet the answer. What is built and
-verified: the frozen taxonomy, the classifier, the result manifest, the producer
-extractor, and the fixtures that validate the classifier against inputs whose
-class is known by construction.
-
-What is not built: the round-trip itself. The reader under test is ADR-F011's
-open question, and classifying is the part that has to be right *first* — a
-percentage computed before divergence is classified measures the writer's zip
-library rather than its fidelity to the book (ADR-F036).
+**Screening result returned: `rbook` 0.7.10 does not round-trip losslessly.**
+Findings in
+[`docs/spikes/SPIKE_F2_EPUB_ROUNDTRIP.md`](../../docs/spikes/SPIKE_F2_EPUB_ROUNDTRIP.md).
+It injects `dc:date` and `dcterms:modified` stamped with the current clock into
+files nothing edited, so consecutive saves of an untouched book differ from each
+other. That is structural — it parses to a model and serialises from it — not a
+bug to wrap around. The corpus run against real files is still outstanding.
 
 ## Running it
 
@@ -27,7 +25,18 @@ cargo test                          # the instrument validates itself
 cargo run -- self-test              # same fixtures, readable output
 cargo run -- compare a.epub b.epub  # classify one round-trip pair
 cargo run -- scan ~/Books --tier=b  # manifest a corpus: hashes and producers
+cargo run -- roundtrip ~/Books      # the spike proper: read, write back, judge
+cargo run --example emit_fixtures -- /tmp/f2   # synthetic containers
+cargo run --example rt_one -- book.epub        # before/after OPF, for diagnosis
 ```
+
+`roundtrip` judges the run under ADR-F047 and **has no plain "pass"**. A clean
+result on a normalized or narrow corpus is `INCONCLUSIVE`, not success: a
+manager's writer strips exactly the constructs that break parsers, so such a
+corpus screens the easy population. Only `QUALIFYING` — clean *and* diverse —
+supports adoption, and `tests/verdict.rs` enforces that a screening pass can
+never reach it. The exit status follows whether ADR-F011 was resolved, not
+whether anything failed.
 
 `scan` is the Tier B entry point and writes `f2-manifest.json`. It records
 hashes, producer strings, normalization signals, EPUB versions, and divergence
@@ -104,14 +113,14 @@ extra one over-classification.
 
 ## What comes next
 
-1. **Tier A acquisition** — local, not an agent task. Agent environments reach
+1. **Run `roundtrip` against real files.** No new code needed — only the books.
+   Given the mechanism, the outcome is not in much doubt, but "not in much doubt"
+   and "measured" are different claims.
+2. **Tier A acquisition** — local, not an agent task. Agent environments reach
    `index.crates.io` only; Gutenberg, Standard Ebooks, and GitHub are
    proxy-denied (D7).
-2. **The round-trip stage** — read with `rbook`, write back, feed both to
-   `classify`. This is where ADR-F011 gets its answer.
-3. **The D12 coverage gate** — `scan` already reports both producer
-   distributions, so the corpus can be judged on distinct *un-normalized*
-   producers before a single round-trip is run.
+3. **The `quick-xml` alternative**, if ADR-F011 reverses. The classifier is
+   directly reusable as its conformance check.
 
 ## Layout
 
@@ -126,7 +135,10 @@ extra one over-classification.
 | `src/manifest.rs` | The publishable artifact (ADR-F038). Carries no book bytes. |
 | `src/fixtures.rs` | One known class per fixture. How the instrument is validated. |
 | `tests/instrument.rs` | Runs the fixtures in CI so drift fails the build. |
+| `src/roundtrip.rs` | Open with rbook, write back untouched. A panic is a finding, not a crash. |
+| `src/verdict.rs` | ADR-F047 as a type. There is no `Verdict::Pass`. |
 | `tests/normalization.rs` | Both directions: the detector fires on rewritten files and stays silent on clean ones. |
+| `tests/verdict.rs` | A screening pass can never support adoption. |
 
 Spike code: outside the Cargo workspace (note the empty `[workspace]` table in
 `Cargo.toml`), and nothing in `crates/` may depend on it.

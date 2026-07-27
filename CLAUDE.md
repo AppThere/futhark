@@ -94,17 +94,9 @@ futhark/
 │  └─ futhark-convert/    # Conversion: EPUB→KF8 compiler, CSS downconvert
 ├─ shell/                 # presentation shell — DO NOT POPULATE IN PHASE 0
 ├─ conformance/           # appthere-conformance suite
-├─ spikes/                # Phase 0 spike harnesses — throwaway, never depended on
 ├─ docs/                  # specs and ADRs
-│  └─ spikes/             # spike findings, one document per spike
 └─ patches/
 ```
-
-`spikes/` is outside the Cargo workspace on purpose. A spike answers one question
-and then becomes evidence; nothing in `crates/` may ever depend on one. A spike
-may contain shell code where the question *is* about the shell (F1c probes
-`WKURLSchemeHandler` origin semantics and needs a Tauri host to do it) — that is
-not a licence to populate `shell/`, which stays empty until D1 resolves.
 
 Context names in the spec map one-to-one onto crate names. There is no translation step.
 
@@ -123,6 +115,20 @@ come after Phase 0 and after the spikes resolve.
 `cargo clippy` before declaring anything done.
 
 **When a decision is missing, ask.** Do not infer it from surrounding code and proceed.
+
+## Standing review question
+
+Three findings in this project have shared one shape: **a signal that looks like the healthy one
+but is produced by a different mechanism.**
+
+- `Class::Unclassified` scoring as "no problem found" rather than "no explanation fits"
+- A sandboxed probe's silence scoring as a pass rather than as unobservable
+- A rewritten file's producer string scoring as ecosystem diversity rather than as one writer
+
+Only the first generalized on its own; the others were caught by a control run and by review. So
+ask it explicitly rather than waiting to notice it: **for every pass, green result, or healthy
+count — what else could produce this exact signal?** Prefer a distinguishable failure over a
+silent one, and make the ambiguous case its own reportable state (ADR-F042).
 
 ## Commands
 

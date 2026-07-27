@@ -48,10 +48,34 @@ const OPF: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
     <meta name="generator" content="futhark-f2-fixtures"/>
   </metadata>
   <manifest>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
     <item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
   </manifest>
-  <spine><itemref idref="c1"/></spine>
+  <spine toc="ncx"><itemref idref="c1"/></spine>
 </package>
+"#;
+
+// A nav document and an NCX are not optional decoration. Without them the
+// container is not a valid EPUB 3, and a reader that *repairs* invalid input by
+// synthesising the missing pieces looks identical to one that corrupts valid
+// input — both show up as `entry-added`. The first round-trip run against rbook
+// produced exactly that confound, which is why they are here.
+const NAV: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<head><title>Contents</title></head>
+<body><nav epub:type="toc" id="toc"><ol><li><a href="ch1.xhtml">One</a></li></ol></nav></body>
+</html>
+"#;
+
+const NCX: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+<head><meta name="dtb:uid" content="urn:uuid:f2-fixture"/></head>
+<docTitle><text>Fixture</text></docTitle>
+<navMap><navPoint id="np1" playOrder="1">
+  <navLabel><text>One</text></navLabel><content src="ch1.xhtml"/>
+</navPoint></navMap>
+</ncx>
 "#;
 
 const CHAPTER: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
@@ -87,6 +111,16 @@ fn base_plan() -> Vec<Plan> {
         Plan {
             name: "OEBPS/package.opf",
             body: OPF.as_bytes().to_vec(),
+            stored: false,
+        },
+        Plan {
+            name: "OEBPS/nav.xhtml",
+            body: NAV.as_bytes().to_vec(),
+            stored: false,
+        },
+        Plan {
+            name: "OEBPS/toc.ncx",
+            body: NCX.as_bytes().to_vec(),
             stored: false,
         },
         Plan {
@@ -234,7 +268,7 @@ pub fn all() -> Result<Vec<Fixture>> {
 
     // --- B: container metadata --------------------------------------------
     let mut reordered = base_plan();
-    reordered.swap(2, 3);
+    reordered.swap(3, 4);
     out.push(Fixture {
         id: "entry-order",
         source: base.clone(),

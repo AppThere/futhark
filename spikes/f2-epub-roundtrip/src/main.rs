@@ -7,7 +7,12 @@
 //! futhark-f2 self-test                  validate the instrument against fixtures
 //! futhark-f2 compare <a.epub> <b.epub>  classify one round-trip pair
 //! futhark-f2 scan <dir> --tier=b        manifest every .epub under a directory
+//! futhark-f2 roundtrip <dir> [--tier=a] [--min-producers=N]
 //! ```
+//!
+//! `roundtrip` is the spike proper: open each book with rbook, write it back
+//! untouched, classify the difference, and judge the result under ADR-F047. The
+//! judgement has no plain "pass" — see `verdict.rs`.
 //!
 //! `scan` is the Tier B entry point. It writes hashes, producer strings, and
 //! divergence classes — never content — so its output is publishable (ADR-F038).
@@ -21,10 +26,11 @@ use futhark_f2::archive::Archive;
 use futhark_f2::classify::classify;
 use futhark_f2::error::{F2Error, Result};
 use futhark_f2::manifest::{Manifest, Record, Tier};
-use futhark_f2::normalization;
 use futhark_f2::producer::read_package;
 use futhark_f2::taxonomy::CLASSIFIER_VERSION;
+use futhark_f2::verdict::{self, Verdict};
 use futhark_f2::{fixtures, taxonomy::Class};
+use futhark_f2::{normalization, roundtrip};
 
 fn main() -> ExitCode {
     match run() {
@@ -43,6 +49,7 @@ fn run() -> Result<bool> {
         Some("self-test") => self_test(),
         Some("compare") => compare(args.get(1), args.get(2)),
         Some("scan") => scan(&args),
+        Some("roundtrip") => roundtrip_corpus(&args),
         _ => Err(F2Error::Usage(
             "self-test | compare <a> <b> | scan <dir> [--tier=a|b]".into(),
         )),
@@ -183,6 +190,7 @@ fn scan(args: &[String]) -> Result<bool> {
             // Tier B paths are the developer's filesystem and are not published.
             path: matches!(tier, Tier::A).then(|| path.display().to_string()),
             producer: pkg.producer,
+            outcome: None,
             normalized_by: normalization::detect(&source, Some(&path)).labels(),
             epub_version: pkg.version,
             entry_count: source.entries.len(),
@@ -215,6 +223,94 @@ fn scan(args: &[String]) -> Result<bool> {
         manifest.records.len()
     );
     Ok(true)
+}
+
+/// The spike proper. Round-trips every book and judges the result under
+/// ADR-F047's asymmetry, which is why the exit status follows
+/// `resolves_adr_f011` rather than "did anything fail": an inconclusive run is
+/// not a success, and a disqualifying one is a successful *measurement*.
+fn roundtrip_corpus(args: &[String]) -> Result<bool> {
+    let dir = args
+        .get(1)
+        .ok_or_else(|| F2Error::Usage("roundtrip <dir> [--tier=a] [--min-producers=N]".into()))?;
+    let tier = if args.iter().any(|a| a == "--tier=a") {
+        Tier::A
+    } else {
+        Tier::B
+    };
+    let floor = args
+        .iter()
+        .find_map(|a| a.strip_prefix("--min-producers="))
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(verdict::PROVISIONAL_PRODUCER_FLOOR);
+
+    let work = std::env::temp_dir().join("futhark-f2-roundtrip");
+    std::fs::create_dir_all(&work).map_err(|e| F2Error::Io {
+        path: work.display().to_string(),
+        source: e,
+    })?;
+
+    let mut manifest = Manifest::new();
+    for (i, path) in find_epubs(Path::new(dir))?.into_iter().enumerate() {
+        let source = Archive::read(&path)?;
+        let pkg = read_package(&source);
+        let bytes = std::fs::metadata(&path)
+            .map_err(|e| F2Error::Io {
+                path: path.display().to_string(),
+                source: e,
+            })?
+            .len();
+
+        let dest = work.join(format!("rt-{i}.epub"));
+        let outcome = roundtrip::roundtrip(&path, &dest);
+        // Only a produced file can be compared. An absent output is recorded as
+        // the outcome it is, never as an empty divergence list.
+        let divergences = if outcome.produced_output() {
+            match Archive::read(&dest) {
+                Ok(rt) => classify(&source, &rt),
+                Err(_) => Vec::new(),
+            }
+        } else {
+            Vec::new()
+        };
+        let _ = std::fs::remove_file(&dest);
+
+        if !matches!(outcome, roundtrip::Outcome::RoundTripped) {
+            println!("  {:?}  {}", outcome, path.display());
+        }
+
+        manifest.records.push(Record {
+            source_hash: Archive::file_hash(&path)?,
+            source_bytes: bytes,
+            tier,
+            path: matches!(tier, Tier::A).then(|| path.display().to_string()),
+            producer: pkg.producer,
+            normalized_by: normalization::detect(&source, Some(&path)).labels(),
+            epub_version: pkg.version,
+            entry_count: source.entries.len(),
+            divergences,
+            outcome: Some(outcome),
+            classifier_version: CLASSIFIER_VERSION.to_owned(),
+        });
+    }
+
+    let summary = manifest.summary();
+    print!("\n{}", summary.render());
+
+    let verdict = Verdict::judge(&summary, floor);
+    println!("\n{}\n", verdict.render());
+    std::fs::write("f2-manifest.json", serde_json::to_string_pretty(&manifest)?).map_err(|e| {
+        F2Error::Io {
+            path: "f2-manifest.json".into(),
+            source: e,
+        }
+    })?;
+    println!(
+        "wrote f2-manifest.json ({} records)",
+        manifest.records.len()
+    );
+
+    Ok(verdict.resolves_adr_f011())
 }
 
 fn find_epubs(dir: &Path) -> Result<Vec<PathBuf>> {
