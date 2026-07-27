@@ -9,10 +9,10 @@ SPDX-License-Identifier: Apache-2.0
 |---|---|
 | Document | `SPIKE_F2_EPUB_ROUNDTRIP.md` |
 | Spike ID | F2 |
-| Status | **Screening result returned on synthetic input. ADR-F011 reversed in spec 0.12.0 on this evidence.** |
-| Version | 0.2.0 |
+| Status | **Screening result returned on synthetic input. ADR-F011 reversed in spec 0.12.0 on this evidence. F2b instrument built; not yet run against real books.** |
+| Version | 0.3.0 |
 | Date | 2026-07-27 |
-| Depends on | `FUTHARK_PROGRAM_SPEC.md` 0.12.0 — §10, R5, ADR-F012, ADR-F036, ADR-F041, ADR-F047, ADR-F048, ADR-F050 |
+| Depends on | `FUTHARK_PROGRAM_SPEC.md` 0.13.0 — §10, R5, ADR-F012, ADR-F036, ADR-F041, ADR-F047, ADR-F048, ADR-F050, ADR-F051 |
 | Harness | `spikes/f2-epub-roundtrip/` |
 | Raw results | `f2-manifest.json`, regenerated per run |
 
@@ -175,22 +175,73 @@ target: **`rbook` is no longer the subject.** Confirming a library that will not
 be used is low-value work.
 
 The question worth the same command is **F2b**: *what infoset and container
-features do real EPUBs actually contain that `futhark-epub` must preserve?*
-Comments, processing instructions, attribute ordering, exotic namespaces, zip
-structure quirks, EPUB 2 survivals. The deliverable is a requirements list for
-the build — and it confirms the reversal as a side effect, which is the part of
-the old recommendation worth keeping.
+features do real EPUBs actually contain that `futhark-epub` must preserve?* Its
+answer is needed in Phase 6 regardless of what happened to ADR-F011, which it
+confirms as a side effect. The instrument is built (`cargo run -- characterise
+<dir>`); what it has not seen is a book nobody generated.
 
-Its answer is needed in Phase 6 regardless of what happens to ADR-F011, which is
-what makes it the durable version of the run.
+### 7.1 F2b has no verdict, so it has two types
 
-The coverage gate has shifted purpose along with it. It no longer adjudicates
-`rbook`; it validates `futhark-epub` once built — which makes the bar more
-important, not less. D12 set it at **≥8 distinct producer families, no family
-above 40%** of the un-normalized population, counted by family rather than by
-string (ADR-F050) because "InDesign 17" and "InDesign 19" are one toolchain. The
-verdict names the families it counted, so coverage can be argued with rather than
-trusted to a threshold.
+`roundtrip` could put its caveat in `Verdict`, and that worked. F2b cannot: it
+produces an enumeration, and a thin enumeration on a normalized corpus is
+indistinguishable from a thin ecosystem. The caveat has nowhere to live except
+prose — which is precisely the arrangement that failed in §2.1 of this document.
+
+**ADR-F050 — a fixed catalogue, three states.** `Observed`,
+`CheckedAndAbsent`, `NotCovered`. The third means *no detector exists*: evidence
+about the harness, never about the corpus. Four catalogue entries have no
+detector deliberately, so the state is non-empty by construction — a catalogue
+where everything is covered cannot demonstrate the difference between the two
+silences. The report is arithmetic: *26 catalogued, k observed, m explicitly
+absent, j never looked at.*
+
+A fifth entry joined them during the build, and it is the standing review
+question landing inside the instrument written to answer it. `directory-entry`
+had a detector; `Archive::read` skips `is_dir()` entries. It would have reported
+`CheckedAndAbsent` on every corpus ever scanned — a clean signal produced by the
+reader's filter rather than by the books.
+
+Two detectors had the same shape in the other direction, over-reporting
+`Observed` from a substring rather than a construct. Every EPUB declares the OCF
+namespace as `urn:oasis:names:tc:opendocument:xmlns:container`, so scanning for
+`xmlns:` found an exotic prefix in every book ever made; and prose split on
+whitespace yields tokens that are never alphabetical, so `<p>the quick brown
+fox` scored as non-alphabetical attribute order. `Observed` is the state nothing
+downstream questions — it needs no disposition and goes straight into the
+requirements — which is what makes a false one expensive. Both are now
+regression tests.
+
+**ADR-F051 — the output is a floor, and the type is named one.** `FeatureFloor`
+exposes no requirements list. The only route to `Requirements` is `widen()`,
+which fails unless every feature the corpus could not settle carries a
+disposition *with a reason*, and which stamps the result with the corpus behind
+it. `Requirements` has private fields and no `Deserialize`, because parsing one
+from JSON would be a back door around the widening step.
+
+What counts as unsettled is a property of the corpus, not of taste. On a
+normalized corpus `CheckedAndAbsent` is worth no more than `NotCovered`: a
+manager's writer strips exactly the constructs being enumerated, so its silence
+is the writer's. `CorpusProvenance::absence_is_evidence` requires zero
+normalization evidence *and* D12's gate in both directions before a corpus's
+silence is believed at all. On the synthetic fixtures — twelve books, one
+family — 23 of 26 features come back unsettled, which is the instrument
+reporting the corpus rather than the ecosystem.
+
+### 7.2 The coverage gate changed purpose
+
+It no longer adjudicates `rbook`; it validates `futhark-epub` once built, which
+makes the bar more important rather than less. D12 set it at **≥8 distinct
+producer families, no family above 40%** of the un-normalized population,
+counted by family rather than by string because "InDesign 17" and "InDesign 19"
+are one toolchain. The verdict names the families it counted: **a threshold can
+only be trusted or not; a named list can be argued with.**
+
+### 7.3 One editorial note
+
+Spec 0.13.0 carries **two ADRs numbered F050** — the feature catalogue and the
+producer-family rule. Both are cited in this document and in the code at the
+number the spec gives them. Renumbering is the spec author's call, not the
+spike's.
 
 ## 8. Reproducing
 
@@ -199,9 +250,11 @@ cd spikes/f2-epub-roundtrip
 cargo test                                   # instrument self-validation
 cargo run --example emit_fixtures -- /tmp/f2 # synthetic containers
 cargo run -- roundtrip /tmp/f2 --tier=a      # this result
-cargo run -- roundtrip ~/Books               # F2b: characterise the wild population
+cargo run -- characterise ~/Books            # F2b: enumerate the wild population
 cargo run --example rt_one -- <file.epub>    # before/after, for diagnosis
 ```
 
 `roundtrip` exits non-zero unless the verdict resolves ADR-F011 in either
-direction — an inconclusive run is not a success.
+direction — an inconclusive run is not a success. `characterise` exits non-zero
+on an empty corpus, because an all-`NotCovered` floor from zero books is not a
+thin result about the ecosystem; it is no result.

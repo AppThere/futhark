@@ -27,6 +27,7 @@ cargo run -- self-test              # same fixtures, readable output
 cargo run -- compare a.epub b.epub  # classify one round-trip pair
 cargo run -- scan ~/Books --tier=b  # manifest a corpus: hashes and producers
 cargo run -- roundtrip ~/Books      # the spike proper: read, write back, judge
+cargo run -- characterise ~/Books   # F2b: enumerate what the population contains
 cargo run --example emit_fixtures -- /tmp/f2   # synthetic containers
 cargo run --example rt_one -- book.epub        # before/after OPF, for diagnosis
 ```
@@ -65,6 +66,52 @@ files carrying **no** normalization evidence. Only the second is D12's gate
 `META-INF/calibre_bookmarks.txt`, and sidecar `metadata.opf` / `cover.jpg` in the
 same directory — and the run warns outright when the un-normalized population has
 fewer than two distinct producers.
+
+## F2b: `characterise`, and why its output is not a requirements list
+
+F2b writes nothing back and judges no reader. It asks what real EPUBs *contain*
+that `futhark-epub` must preserve, and its problem is that it has no verdict to
+hang a caveat on — a thin result on a normalized corpus looks exactly like a
+thin ecosystem. Two types carry the caveat instead.
+
+**ADR-F050 — a fixed catalogue, three states per feature.** `Observed`,
+`CheckedAndAbsent`, `NotCovered`. The third is the one that matters: it means
+*no detector exists*, and it is evidence about the harness rather than about the
+corpus. Four entries in `src/catalogue.rs` deliberately have no detector, so
+`NotCovered` is non-empty by construction — a catalogue where everything is
+covered cannot demonstrate the difference between the two silences, and quietly
+becomes a two-state list the first time someone reads a report off it. The
+output is arithmetic rather than rhetoric: *26 catalogued, k observed, m
+explicitly absent, j never looked at.*
+
+A fifth entry joined them while this was being built. `directory-entry` had a
+detector, and `Archive::read` skips `is_dir()` entries — so it would have
+reported `CheckedAndAbsent` on every corpus ever scanned, a clean signal
+produced by the reader's filter rather than by the books. It is now `NotCovered`
+with that as its reason, and `tests/catalogue.rs` holds it there.
+
+**ADR-F051 — the output is a floor and the type says so.** `FeatureFloor` has no
+method that yields a requirements list. The only route to `Requirements` is
+`widen()`, which fails unless every feature the corpus could not settle carries
+an explicit disposition *with a reason*, and which stamps the result with the
+corpus it came from. `Requirements` has private fields and deliberately does not
+derive `Deserialize`, because parsing one from JSON would be a back door around
+the widening step.
+
+Which features count as unsettled depends on the corpus rather than on taste. On
+a normalized corpus, `CheckedAndAbsent` is worth no more than `NotCovered` — a
+manager's writer strips exactly the constructs being enumerated, so its silence
+is about the writer. That is ADR-F047's asymmetry applied to enumeration, and
+`CorpusProvenance::absence_is_evidence` is where it lives.
+
+Two detectors were reporting `Observed` off a substring rather than a construct,
+and both are now regression tests. Every EPUB declares the OCF namespace as
+`urn:oasis:names:tc:opendocument:xmlns:container`, so a bare `xmlns:` scan
+reported an exotic namespace prefix in every book ever made; and prose split on
+whitespace yields "attribute names" that are never alphabetical, so
+`<p>the quick brown fox` scored as non-alphabetical attribute order. `Observed`
+is the state nothing downstream questions — it needs no disposition and goes
+straight into `must_preserve` — which is what makes a false one expensive.
 
 ## The taxonomy is frozen
 
@@ -121,11 +168,9 @@ extra one over-classification.
 
 ## What comes next
 
-1. **F2b — characterise the wild population.** Same command, different question:
-   not "does rbook fail" (settled, and rbook is no longer the subject) but *what
-   must `futhark-epub` preserve?* Comments, processing instructions, attribute
-   ordering, exotic namespaces, zip quirks. The deliverable is a requirements
-   list for the build, needed in Phase 6 whatever happens to ADR-F011.
+1. **F2b against a real corpus** — `characterise` is built and tested; what it
+   has not seen is a book nobody generated. Needed in Phase 6 whatever happened
+   to ADR-F011, which it confirms as a side effect.
 2. **Tier A acquisition** — local, not an agent task. Agent environments reach
    `index.crates.io` only; Gutenberg, Standard Ebooks, and GitHub are
    proxy-denied (D7).
@@ -148,6 +193,13 @@ extra one over-classification.
 | `tests/instrument.rs` | Runs the fixtures in CI so drift fails the build. |
 | `src/roundtrip.rs` | Open with rbook, write back untouched. A panic is a finding, not a crash. |
 | `src/verdict.rs` | ADR-F047 as a type. There is no `Verdict::Pass`. |
+| `src/catalogue.rs` | ADR-F050: the fixed feature list and its three states. Some entries have no detector on purpose. |
+| `src/detect.rs` | The detectors behind `Observed` and `CheckedAndAbsent`. Scans, never parses. |
+| `src/floor.rs` | ADR-F051: `FeatureFloor`, `widen()`, and the only type that may be read as a specification. |
+| `src/provenance.rs` | What a floor rests on, and what widening one costs. |
+| `src/characterise.rs` | F2b itself: walk, enumerate, emit the floor. |
+| `tests/catalogue.rs` | `NotCovered` is not `CheckedAndAbsent`, and stays non-empty. |
+| `tests/floor.rs` | A floor cannot become a specification without a reasoned widening. |
 | `tests/normalization.rs` | Both directions: the detector fires on rewritten files and stays silent on clean ones. |
 | `tests/verdict.rs` | A screening pass can never support adoption. |
 

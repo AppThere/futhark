@@ -8,6 +8,7 @@
 //! futhark-f2 compare <a.epub> <b.epub>  classify one round-trip pair
 //! futhark-f2 scan <dir> --tier=b        manifest every .epub under a directory
 //! futhark-f2 roundtrip <dir> [--tier=a] [--min-families=N]
+//! futhark-f2 characterise <dir> [--tier=a]   F2b: enumerate the population
 //! ```
 //!
 //! `roundtrip` is the spike proper: open each book with rbook, write it back
@@ -16,20 +17,25 @@
 //!
 //! `scan` is the Tier B entry point. It writes hashes, producer strings, and
 //! divergence classes — never content — so its output is publishable (ADR-F038).
+//!
+//! `characterise` is F2b. It writes nothing back and judges no reader; it
+//! enumerates what the corpus contains against a fixed catalogue and emits a
+//! floor — see `floor.rs` for why that output is not a requirements list.
 
 #![forbid(unsafe_code)]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::ExitCode;
 
 use futhark_f2::archive::Archive;
+use futhark_f2::characterise::characterise;
 use futhark_f2::classify::classify;
+use futhark_f2::corpus::find_epubs;
 use futhark_f2::error::{F2Error, Result};
 use futhark_f2::manifest::{Manifest, Record, Tier};
 use futhark_f2::producer::read_package;
 use futhark_f2::taxonomy::CLASSIFIER_VERSION;
 use futhark_f2::verdict::{self, Verdict};
-use futhark_f2::{fixtures, taxonomy::Class};
 use futhark_f2::{normalization, roundtrip};
 
 fn main() -> ExitCode {
@@ -46,91 +52,32 @@ fn main() -> ExitCode {
 fn run() -> Result<bool> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
-        Some("self-test") => self_test(),
+        Some("self-test") => futhark_f2::selftest::self_test(),
         Some("compare") => compare(args.get(1), args.get(2)),
         Some("scan") => scan(&args),
         Some("roundtrip") => roundtrip_corpus(&args),
+        Some("characterise") => {
+            let dir = args
+                .get(1)
+                .ok_or_else(|| F2Error::Usage("characterise <dir> [--tier=a|b]".into()))?;
+            characterise(Path::new(dir), tier_of(&args))
+        }
         _ => Err(F2Error::Usage(
-            "self-test | compare <a> <b> | scan <dir> [--tier=a|b]".into(),
+            "self-test | compare <a> <b> | scan <dir> [--tier=a|b] \
+             | roundtrip <dir> | characterise <dir>"
+                .into(),
         )),
     }
 }
 
-/// The instrument validating itself against inputs whose class is known by
-/// construction. A classifier that has never been shown a known answer is not
-/// an instrument, it is an opinion.
-fn self_test() -> Result<bool> {
-    let mut failures = 0;
-    for f in fixtures::all()? {
-        let a = read_bytes(&f.source)?;
-        let b = read_bytes(&f.roundtrip)?;
-        let found = classify(&a, &b);
-        let classes: Vec<Class> = {
-            let mut v: Vec<Class> = found.iter().map(|d| d.class).collect();
-            v.sort_unstable();
-            v.dedup();
-            v
-        };
-
-        let mut want = f.expect.to_vec();
-        want.sort_unstable();
-        let ok = classes == want;
-
-        if ok {
-            println!("  ok    {:<22} {}", f.id, describe(&classes));
-        } else {
-            failures += 1;
-            println!(
-                "  FAIL  {:<22} expected [{}], got [{}]",
-                f.id,
-                describe(&want),
-                describe(&classes)
-            );
-            for d in &found {
-                println!("           {} {:?} {}", d.class.slug(), d.entry, d.detail);
-            }
-        }
-    }
-    println!(
-        "\nclassifier {CLASSIFIER_VERSION}: {} failing fixture(s)",
-        failures
-    );
-    Ok(failures == 0)
-}
-
-fn describe(classes: &[Class]) -> String {
-    if classes.is_empty() {
-        "no divergence".to_owned()
+/// Tier from the flags, defaulting to B — the developer's own library is the
+/// common case and the one whose paths must never reach the manifest.
+fn tier_of(args: &[String]) -> Tier {
+    if args.iter().any(|a| a == "--tier=a") {
+        Tier::A
     } else {
-        classes
-            .iter()
-            .map(|c| c.slug())
-            .collect::<Vec<_>>()
-            .join(", ")
+        Tier::B
     }
-}
-
-/// Read an in-memory container by way of a temp file, since the zip reader
-/// wants a seekable source and the fixtures live in memory.
-fn read_bytes(bytes: &[u8]) -> Result<Archive> {
-    let mut path = std::env::temp_dir();
-    path.push(format!("f2-{:x}.zip", fnv(bytes)));
-    std::fs::write(&path, bytes).map_err(|e| F2Error::Io {
-        path: path.display().to_string(),
-        source: e,
-    })?;
-    let a = Archive::read(&path);
-    let _ = std::fs::remove_file(&path);
-    a
-}
-
-fn fnv(bytes: &[u8]) -> u64 {
-    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    for b in bytes {
-        h ^= u64::from(*b);
-        h = h.wrapping_mul(0x1000_0000_01b3);
-    }
-    h
 }
 
 fn compare(a: Option<&String>, b: Option<&String>) -> Result<bool> {
@@ -167,11 +114,7 @@ fn scan(args: &[String]) -> Result<bool> {
     let dir = args
         .get(1)
         .ok_or_else(|| F2Error::Usage("scan <dir> [--tier=a|b]".into()))?;
-    let tier = if args.iter().any(|a| a == "--tier=a") {
-        Tier::A
-    } else {
-        Tier::B
-    };
+    let tier = tier_of(args);
 
     let mut manifest = Manifest::new();
     for path in find_epubs(Path::new(dir))? {
@@ -233,11 +176,7 @@ fn roundtrip_corpus(args: &[String]) -> Result<bool> {
     let dir = args
         .get(1)
         .ok_or_else(|| F2Error::Usage("roundtrip <dir> [--tier=a] [--min-families=N]".into()))?;
-    let tier = if args.iter().any(|a| a == "--tier=a") {
-        Tier::A
-    } else {
-        Tier::B
-    };
+    let tier = tier_of(args);
     let floor = args
         .iter()
         .find_map(|a| a.strip_prefix("--min-families="))
@@ -311,25 +250,4 @@ fn roundtrip_corpus(args: &[String]) -> Result<bool> {
     );
 
     Ok(verdict.resolves_adr_f011())
-}
-
-fn find_epubs(dir: &Path) -> Result<Vec<PathBuf>> {
-    let mut out = Vec::new();
-    let entries = std::fs::read_dir(dir).map_err(|e| F2Error::Io {
-        path: dir.display().to_string(),
-        source: e,
-    })?;
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            out.extend(find_epubs(&path)?);
-        } else if path
-            .extension()
-            .is_some_and(|e| e.eq_ignore_ascii_case("epub"))
-        {
-            out.push(path);
-        }
-    }
-    out.sort();
-    Ok(out)
 }

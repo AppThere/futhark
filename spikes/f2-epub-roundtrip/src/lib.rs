@@ -13,20 +13,33 @@
 //! `rbook` is fixable or replaceable, which is the decision ADR-F011 is waiting
 //! on.
 //!
+//! F2b reuses the same reading machinery for a different question — what real
+//! EPUBs *contain* that `futhark-epub` must preserve. Its deliverable has no
+//! verdict to carry a caveat, so the caveat is two types: a three-state feature
+//! catalogue (ADR-F050) and a floor that cannot be read as a specification
+//! without an explicit widening (ADR-F051).
+//!
 //! This is spike code: outside the Cargo workspace, and nothing in `crates/`
 //! may depend on it.
 
 #![forbid(unsafe_code)]
 
 pub mod archive;
+pub mod catalogue;
+pub mod characterise;
 pub mod classify;
+pub mod corpus;
+pub mod detect;
 pub mod error;
 pub mod family;
 pub mod fixtures;
+pub mod floor;
 pub mod manifest;
 pub mod normalization;
 pub mod producer;
+pub mod provenance;
 pub mod roundtrip;
+pub mod selftest;
 pub mod taxonomy;
 pub mod verdict;
 pub mod xmlcmp;
