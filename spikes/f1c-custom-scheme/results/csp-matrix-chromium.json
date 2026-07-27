@@ -258,7 +258,7 @@
       "expect": {
         "image": "deny-intent"
       },
-      "note": "'none' alongside other sources is a malformed list per the CSP grammar. Both engines ignore the 'none' and honour the rest — permissively, and identically in both orderings. Not an engine bug; a construction hazard (ADR-F039).",
+      "note": "'none' alongside other sources is a malformed list per the CSP grammar. Both engines ignore the 'none' and honour the rest — permissively, and identically in both orderings. Not an engine bug; the construction hazard behind ADR-F039b.",
       "results": {
         "probeRan": true,
         "externalScript": "allowed",
@@ -411,12 +411,12 @@
       "hazard": 0
     },
     {
-      "id": "r25-canary-keyword-first",
+      "id": "keyword-then-host",
       "csp": "default-src 'none'; script-src http://127.0.0.1:7202; img-src 'self' http://127.0.0.1:7202",
       "expect": {
-        "image": "canary"
+        "image": "allow"
       },
-      "note": "WebKit drops the host-source when a keyword precedes it. Blocked here means the bug is still present and ADR-F039 is still required.",
+      "note": "The retracted ADR-F039 case. Allowed on both engines; a block here is a regression in the engine or in the harness.",
       "results": {
         "probeRan": true,
         "externalScript": "allowed",
@@ -431,9 +431,9 @@
       "rows": [
         {
           "key": "image",
-          "want": "canary",
+          "want": "allow",
           "got": "allowed",
-          "verdict": "CANARY-TRIPPED"
+          "verdict": "ok"
         }
       ],
       "failOpen": 0,

@@ -78,7 +78,7 @@ function cases(origin) {
       id: 'none-with-host-after',
       csp: `default-src 'none'; script-src ${O}; img-src 'none' ${O}`,
       expect: { image: 'deny-intent' },
-      note: "'none' alongside other sources is a malformed list per the CSP grammar. Both engines ignore the 'none' and honour the rest — permissively, and identically in both orderings. Not an engine bug; a construction hazard (ADR-F039).",
+      note: "'none' alongside other sources is a malformed list per the CSP grammar. Both engines ignore the 'none' and honour the rest — permissively, and identically in both orderings. Not an engine bug; the construction hazard behind ADR-F039b.",
     },
     {
       id: 'none-with-host-before',
@@ -111,14 +111,15 @@ function cases(origin) {
       note: 'Whitespace other than a plain space still separates tokens.',
     },
     {
-      // R25: the host-first workaround in ADR-F039 exists because this case
-      // blocks on WebKit. If it ever starts loading there, the engine has been
-      // fixed and the workaround has expired — which is something to be told,
-      // not to discover by accident years later.
-      id: 'r25-canary-keyword-first',
+      // Kept as a regression guard, not as a canary. ADR-F039 claimed a WebKit
+      // ordering bug; it was a measurement artifact and is retracted, so this
+      // case must now *allow* on both engines. If it ever blocks again, either
+      // an engine really did change or the harness has regressed to judging an
+      // asynchronous load synchronously (ADR-F043) — both worth being told.
+      id: 'keyword-then-host',
       csp: `default-src 'none'; script-src ${O}; img-src 'self' ${O}`,
-      expect: { image: 'canary' },
-      note: 'WebKit drops the host-source when a keyword precedes it. Blocked here means the bug is still present and ADR-F039 is still required.',
+      expect: { image: 'allow' },
+      note: 'The retracted ADR-F039 case. Allowed on both engines; a block here is a regression in the engine or in the harness.',
     },
     // The original §5 bisection, re-run under the race-free harness and with an
     // image check that waits for load/error instead of reading `complete`
@@ -184,7 +185,6 @@ function judge(expect, results) {
     // policy, not an engine defect — the grammar does not permit the input. It
     // is tracked separately so the fail-open count stays a count of real ones.
     else if (want === 'deny-intent') verdict = got === 'allowed' ? 'HAZARD-permissive' : 'ok';
-    else if (want === 'canary') verdict = got === 'allowed' ? 'CANARY-TRIPPED' : 'bug-still-present';
     else if (want === 'deny' && got === 'allowed') verdict = 'FAIL-OPEN';
     else if (want === 'allow' && got === 'blocked') verdict = 'over-blocked';
     else if (want !== 'either' && got !== (want === 'deny' ? 'blocked' : 'allowed')) verdict = `unexpected:${got}`;
@@ -218,12 +218,10 @@ async function main() {
         const rows = judge(c.expect, results);
         const failOpen = rows.filter((r) => r.verdict === 'FAIL-OPEN');
         const hazard = rows.filter((r) => r.verdict === 'HAZARD-permissive');
-        const canary = rows.filter((r) => r.verdict === 'CANARY-TRIPPED');
         out.cases.push({ ...c, results, rows, failOpen: failOpen.length, hazard: hazard.length });
         const notes = [];
         if (failOpen.length) notes.push(`FAIL-OPEN: ${failOpen.map((r) => r.key).join(',')}`);
         if (hazard.length) notes.push('malformed-list resolved permissively');
-        if (canary.length) notes.push('CANARY TRIPPED — WebKit ordering bug appears fixed; revisit ADR-F039');
         const odd = rows.filter((r) => r.verdict === 'over-blocked' || r.verdict.startsWith('unexpected'));
         if (odd.length) notes.push(odd.map((r) => `${r.key}=${r.got}`).join(' '));
         log(`  ${c.id.padEnd(26)} ${failOpen.length ? 'FAIL' : 'ok  '}`

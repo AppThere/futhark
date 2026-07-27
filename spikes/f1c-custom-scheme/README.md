@@ -39,8 +39,8 @@ node http-control/csp-matrix.mjs                # R24: policy permutation sweep
 ```
 
 The matrix sweeps CSP permutations and judges each against what the standard
-requires: fail-open, over-blocking, malformed-list hazard, or the R25 canary. The
-runner owns the expectations; the probe only reports what loaded.
+requires: fail-open, over-blocking, or malformed-list hazard. The runner owns the
+expectations; the probe only reports what loaded (ADR-F042).
 
 ## Status of the Tauri shell
 

@@ -1,0 +1,33 @@
+# SPDX-FileCopyrightText: 2026 Kevin Carlson
+# SPDX-License-Identifier: Apache-2.0
+#
+# Spike F2 only. Outside the futhark workspace by charter (spikes/ never
+# participates in `cargo build --workspace`, and nothing in crates/ may depend
+# on this). The empty [workspace] table is what keeps it out.
+
+[workspace]
+
+[package]
+name = "futhark-f2"
+version = "0.0.0"
+description = "Spike F2: EPUB round-trip divergence classifier and result manifest."
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+quick-xml = "0.41"
+zip = "8.6.0"
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"

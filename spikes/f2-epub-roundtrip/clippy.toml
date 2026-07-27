@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: 2026 Kevin Carlson
+# SPDX-License-Identifier: Apache-2.0
+#
+# Mirrors the workspace policy. This crate sits outside the workspace, so it
+# does not inherit the root clippy.toml and needs its own.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests  = true
