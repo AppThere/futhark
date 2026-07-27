@@ -238,6 +238,21 @@ fn roundtrip_corpus(args: &[String]) -> Result<bool> {
 
     let verdict = Verdict::judge(&summary, floor);
     println!("\n{}\n", verdict.render());
+
+    // ADR-F061: the fixture gaps that were supposed to be contingent. Reported
+    // here rather than left for a reader to notice, because a zero that was
+    // predicted to become non-zero is the one number nobody re-checks.
+    let undissolved = summary.undissolved_contingent_gaps();
+    if !undissolved.is_empty() {
+        println!(
+            "ADR-F061 — {} books, and these classes are still zero: {}.\n\
+             The fixture corpus cannot produce them because the synthetic writer\n\
+             pins them; a real library has no such discipline. A zero here is a\n\
+             finding about the detector, not about the corpus.\n",
+            summary.total,
+            undissolved.join(", "),
+        );
+    }
     std::fs::write("f2-manifest.json", serde_json::to_string_pretty(&manifest)?).map_err(|e| {
         F2Error::Io {
             path: "f2-manifest.json".into(),

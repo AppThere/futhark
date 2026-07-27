@@ -155,6 +155,14 @@ The audit found three genuine gaps, and they are named rather than counted:
   declared set exactly, so the gap cannot change size quietly in either
   direction.
 
+  `timestamp` and `compression-level` are **contingent** (ADR-F061), unlike the
+  other two: the gap is a property of the synthetic writer, and a real library
+  varies both freely. `roundtrip` therefore re-checks the prediction — over
+  `CONTINGENT_GAP_MIN_BOOKS` books, a class still at zero is reported as a
+  finding about the detector rather than about the corpus. Written down now,
+  while it is a prediction; read after the run it would be a rationalisation,
+  and the two look identical once the number is on the screen.
+
   Three others were listed here and are not any more, because their fixtures got
   written rather than reclassified (ADR-F057). `extra-field` writes a `0x5455`
   extended-timestamp field on one side; `declared-size-mismatch` patches the
@@ -301,6 +309,7 @@ extra one over-classification.
 | `tests/floor.rs` | A floor cannot become a specification without a reasoned widening. |
 | `tests/reachability.rs` | ADR-F053/F056: every variant reached through the real code path, or named as lacking a witness — sorted by kind. |
 | `tests/detectors.rs` | ADR-F055: every detector paired with a true negative. The assertion is differential, not one-sided. |
+| `src/scratch.rs` | ADR-F062: a temp file that owns its directory, so two callers cannot name the same path. |
 | `tests/normalization.rs` | Both directions: the detector fires on rewritten files and stays silent on clean ones. |
 | `tests/verdict.rs` | A screening pass can never support adoption. |
 

@@ -195,3 +195,55 @@ fn many_producers_but_all_normalized_still_fails_the_gate() {
     );
     assert!(!Verdict::judge(&s, FAMILY_FLOOR).supports_adoption());
 }
+
+/// ADR-F061: `BeyondTheHarness` is contingent on the *synthetic* writer, so it
+/// must dissolve on a real corpus. Both directions, because a report that fires
+/// on every run trains the reader to skip it and one that never fires is the
+/// zero it was built to catch.
+#[test]
+fn a_contingent_gap_that_survives_a_real_corpus_is_reported() {
+    let quiet = manifest_of(
+        (0..futhark_f2::manifest::CONTINGENT_GAP_MIN_BOOKS)
+            .map(|i| record(&format!("publisher-{i}"), false, Vec::new()))
+            .collect(),
+    );
+    assert_eq!(
+        quiet.summary().undissolved_contingent_gaps(),
+        futhark_f2::manifest::CONTINGENT_GAPS,
+        "fifty books with no timestamp divergence at all is a finding about the \
+         detector, not a quiet corpus",
+    );
+
+    let observed = manifest_of(
+        (0..futhark_f2::manifest::CONTINGENT_GAP_MIN_BOOKS)
+            .map(|i| {
+                record(
+                    &format!("publisher-{i}"),
+                    false,
+                    vec![
+                        Divergence::entry(Class::Timestamp, "mimetype", "moved"),
+                        Divergence::entry(Class::CompressionLevel, "ch1.xhtml", "relevelled"),
+                    ],
+                )
+            })
+            .collect(),
+    );
+    assert!(
+        observed.summary().undissolved_contingent_gaps().is_empty(),
+        "a corpus that does exercise them must not be reported",
+    );
+}
+
+#[test]
+fn a_small_corpus_says_nothing_about_a_contingent_gap() {
+    let few = manifest_of(
+        (0..3)
+            .map(|i| record(&format!("publisher-{i}"), false, Vec::new()))
+            .collect(),
+    );
+    assert!(
+        few.summary().undissolved_contingent_gaps().is_empty(),
+        "three books not exercising a class is the ordinary case; reporting it \
+         would train the reader to skip the line that matters",
+    );
+}

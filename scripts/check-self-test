@@ -40,10 +40,19 @@ expect_fail() {
     fi
 }
 
-for c in check-line-limit check-spdx check-layering check-adr-numbers; do
+CHECKS="check-line-limit check-spdx check-layering check-adr-numbers check-fuzz-seeds"
+n=0
+
+for c in $CHECKS; do
+    n=$((n + 1))
     rm -rf "$TMP/w"; mkdir -p "$TMP/w"
     cp -r crates scripts layering.toml "$TMP/w/" 2>/dev/null
     mkdir -p "$TMP/w/docs"; cp docs/FUTHARK_PROGRAM_SPEC.md "$TMP/w/docs/" 2>/dev/null
+    # The fuzz-seed subject travels with the tree it is checked in. Only this
+    # one spike: copying all of `spikes/` would drag build artifacts along.
+    mkdir -p "$TMP/w/spikes"
+    cp -r spikes/fuzz-seed-fixture "$TMP/w/spikes/" 2>/dev/null
+    rm -rf "$TMP/w/spikes/fuzz-seed-fixture/target"
     expect_pass "$c" env -C "$TMP/w" "./scripts/$c" || continue
     case "$c" in
       check-line-limit)
@@ -59,6 +68,8 @@ import pathlib
 p = pathlib.Path('$TMP/w/crates/futhark-doc/Cargo.toml')
 p.write_text(p.read_text().replace('thiserror.workspace = true',
                                    'thiserror.workspace = true\ntauri = \"2\"'))" ;;
+      check-fuzz-seeds)
+        rm -f "$TMP/w/spikes/fuzz-seed-fixture/fuzz/corpus/parse_fixture/known-crash" ;;
       check-adr-numbers)
         python3 -c "
 import pathlib, re
@@ -69,9 +80,25 @@ p.write_text(t.replace('**ADR-F054**', '**ADR-F053**', 1))" ;;
     expect_fail "$c" env -C "$TMP/w" "./scripts/$c"
 done
 
+# ADR-F060: a check with no inputs reports NOT APPLICABLE, never ok. Asserted on
+# the output rather than the exit status, because both are zero — which is the
+# whole difficulty. "Nothing to check" and "everything checked" are different
+# claims that a green tick cannot tell apart.
+rm -rf "$TMP/w"; mkdir -p "$TMP/w/crates" "$TMP/w/spikes" "$TMP/w/conformance"
+cp -r scripts "$TMP/w/"
+empty_out="$(env -C "$TMP/w" ./scripts/check-fuzz-seeds 2>&1 || true)"
+case "$empty_out" in
+    *"NOT APPLICABLE"*)
+        printf '  ok  check-fuzz-seeds says NOT APPLICABLE over zero targets\n' ;;
+    *)
+        printf 'SELF-TEST FAIL: check-fuzz-seeds over zero targets reported:\n%s\n' \
+            "$empty_out" >&2
+        fail=1 ;;
+esac
+
 if [ "$fail" -ne 0 ]; then
     echo "" >&2
     echo "A check that cannot be made to fail is not a check (ADR-F054)." >&2
     exit 1
 fi
-echo "self-test: ok (4 checks pass clean and reject their negative cases)"
+echo "self-test: ok ($n checks pass clean and reject their negative cases)"

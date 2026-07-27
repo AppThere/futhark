@@ -11,8 +11,9 @@
 
 use crate::archive::Archive;
 use crate::classify::classify;
-use crate::error::{F2Error, Result};
+use crate::error::Result;
 use crate::fixtures;
+use crate::scratch::Scratch;
 use crate::taxonomy::{CLASSIFIER_VERSION, Class};
 
 /// The instrument validating itself against inputs whose class is known by
@@ -75,34 +76,11 @@ fn describe(classes: &[Class]) -> String {
 /// Public so `tests/reachability.rs` can drive the fixtures through the same
 /// path the self-test uses. ADR-F053 wants witnesses reached through the real
 /// code path; a test that built its own reader would be witnessing itself.
+///
+/// The scratch file owns a private directory (ADR-F062). Concurrent callers
+/// with identical bytes used to share one path and delete it from under each
+/// other.
 pub fn read_bytes(bytes: &[u8]) -> Result<Archive> {
-    // Keyed by content *and* by a per-call counter and the process id. Content
-    // alone collides the moment two tests read the same fixture concurrently:
-    // one finishes, removes the file, and the other reads a truncated archive
-    // or none at all. That surfaced as `InvalidArchive` in an unrelated test the
-    // first time a third caller was added.
-    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let mut path = std::env::temp_dir();
-    path.push(format!(
-        "f2-{:x}-{}-{n}.zip",
-        fnv(bytes),
-        std::process::id()
-    ));
-    std::fs::write(&path, bytes).map_err(|e| F2Error::Io {
-        path: path.display().to_string(),
-        source: e,
-    })?;
-    let a = Archive::read(&path);
-    let _ = std::fs::remove_file(&path);
-    a
-}
-
-fn fnv(bytes: &[u8]) -> u64 {
-    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    for b in bytes {
-        h ^= u64::from(*b);
-        h = h.wrapping_mul(0x1000_0000_01b3);
-    }
-    h
+    let scratch = Scratch::write("container.zip", bytes)?;
+    Archive::read(scratch.path())
 }

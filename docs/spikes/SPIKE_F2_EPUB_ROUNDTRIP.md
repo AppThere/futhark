@@ -10,9 +10,9 @@ SPDX-License-Identifier: Apache-2.0
 | Document | `SPIKE_F2_EPUB_ROUNDTRIP.md` |
 | Spike ID | F2 |
 | Status | **Screening result returned on synthetic input. ADR-F011 reversed in spec 0.12.0 on this evidence. F2b instrument built; not yet run against real books.** |
-| Version | 0.6.0 |
+| Version | 0.7.0 |
 | Date | 2026-07-27 |
-| Depends on | `FUTHARK_PROGRAM_SPEC.md` 0.17.0 — §10, R5, ADR-F012, ADR-F026, ADR-F036, ADR-F041, ADR-F047, ADR-F048, ADR-F050—F059 |
+| Depends on | `FUTHARK_PROGRAM_SPEC.md` 0.18.0 — §10, R5, ADR-F012, ADR-F026, ADR-F036, ADR-F041, ADR-F047, ADR-F048, ADR-F050—F062 |
 | Harness | `spikes/f2-epub-roundtrip/` |
 | Raw results | `f2-manifest.json`, regenerated per run |
 
@@ -275,6 +275,16 @@ list so the instrument could not be fitted to its own data, which was right and
 remains right. It carried no claim that each class is *measured*, while reading
 exactly as though it did — which is how a class sat in the vocabulary for the
 whole project with nothing behind it.
+
+One of the fixture gaps is contingent rather than permanent (ADR-F061).
+`timestamp` and `compression-level` have no fixture because the synthetic writer
+pins both as control variables — but a real library pins nothing, and the very
+first `rbook` run observed `timestamp` on `mimetype`. So the gap must dissolve
+on the first Tier B run, and `roundtrip` now says so itself: past
+`CONTINGENT_GAP_MIN_BOOKS`, a contingent class still at zero is reported as a
+finding about the detector, not about the corpus. That is recorded while it is
+still a prediction. Read afterwards, the same sentence would be a
+rationalisation, and nothing in the output distinguishes the two.
 
 Auditing the rest turned up a second one, and it is honest rather than broken.
 `Class::Unclassified` is also unreachable from `classify`: `content_divergence`

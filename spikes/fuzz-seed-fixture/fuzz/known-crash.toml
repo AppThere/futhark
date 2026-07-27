@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: 2026 Kevin Carlson
+# SPDX-License-Identifier: Apache-2.0
+#
+# ADR-F026: every fuzz target ships with a seed proving the harness reaches the
+# parser. `check-fuzz-seeds` reads this file, runs the replay, and requires the
+# named panic.
+
+[[target]]
+name = "parse_fixture"
+seed = "known-crash"
+panics_with = "length prefix exceeds buffer"
+replay = "replay"

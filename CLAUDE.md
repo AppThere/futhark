@@ -58,7 +58,8 @@ These are not style preferences. CI enforces them; violations fail the build.
 - **No panics on malformed input. Ever.** Every parser handles hostile bytes. A corrupt book
   renders partially or reports a typed error; it never takes down the process. This is a test
   requirement, not an aspiration.
-- **Every codec crate gets a `cargo-fuzz` target the day it is created.** Not retrofitted.
+- **Every codec crate gets a `cargo-fuzz` target the day it is created**, with a seeded
+  known-crash input proving the harness reaches the parser. Not retrofitted.
   Futhark's inputs are hostile by default in a way Loki's mostly are not.
 - **No domain crate may depend on the shell** (ADR-F002). CI enforces this. It is the mechanism
   that keeps the shell decision reversible — do not let shell types leak downward, not even a
@@ -134,6 +135,10 @@ Encoding a distinction as a type does not exempt it: a declared variant nothing 
 documentation wearing a type's clothes. Every variant needs a witness reached through the real
 code path, and every check needs an input that makes it fail (ADR-F053, ADR-F054).
 
+A reported zero is a measurement only where something can produce a non-zero (ADR-F058). That
+applies to the tooling too: a check with no inputs reports NOT APPLICABLE, never ok (ADR-F060),
+and harness helpers are held to the standard of the code they measure (ADR-F062).
+
 ## Commands
 
 ```bash
@@ -146,6 +151,7 @@ cargo deny check            # license + advisory audit
 ./scripts/check-spdx        # header presence and ordering
 ./scripts/check-layering    # no shell deps in domain crates (ADR-F002)
 ./scripts/check-adr-numbers # duplicate/ambiguous ADR identifiers
+./scripts/check-fuzz-seeds  # every fuzz target crashes on its seeded input
 ./scripts/check-self-test   # every check above rejects a negative case (ADR-F054)
 ```
 

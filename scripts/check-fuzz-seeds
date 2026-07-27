@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Kevin Carlson
+# SPDX-License-Identifier: Apache-2.0
+"""ADR-F026: every fuzz target ships with a seed proving it reaches the parser.
+
+"0 crashes in 24 hours" from a target wired to nothing is `manifest-mismatch: 0`
+at a larger scale and a longer timescale, and it is the version that gets
+believed hardest — nobody re-reads a green fuzz run.
+
+ADR-F060 governs this script's own reporting. A check with no inputs reports
+NOT APPLICABLE, never ok: over zero fuzz targets, "ok" would be the same lie one
+level up, inside the check built to prevent it. And because the point of
+building this before the first codec crate is that it be *live* now, it ships
+with a subject — `spikes/fuzz-seed-fixture` is a parser with a planted defect
+and the seed that finds it.
+
+Two depths, reported distinctly, for the same reason:
+
+  * structure  — the target has a seed and a declared expectation
+  * verified   — the replay ran and the parser actually crashed on that seed
+
+A structure-only pass is not a pass. It says the paperwork is in order.
+"""
+from __future__ import annotations
+
+import shutil
+import subprocess
+import sys
+import tomllib
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+SEARCH = ("crates", "spikes", "conformance")
+
+
+def targets() -> list[tuple[Path, Path]]:
+    """(crate root, target file) for every fuzz target in the tree."""
+    found = []
+    for area in SEARCH:
+        for t in sorted((ROOT / area).glob("*/fuzz/fuzz_targets/*.rs")):
+            found.append((t.parent.parent.parent, t))
+    return found
+
+
+def declared(crate: Path) -> dict[str, dict]:
+    spec = crate / "fuzz" / "known-crash.toml"
+    if not spec.exists():
+        return {}
+    with spec.open("rb") as fh:
+        data = tomllib.load(fh)
+    return {t["name"]: t for t in data.get("target", []) if "name" in t}
+
+
+def replay(crate: Path, entry: dict, seed: Path) -> tuple[bool, str]:
+    """Run the seed through the parser. Returns (crashed, detail)."""
+    name = entry.get("replay")
+    if not name:
+        return False, "no replay example declared"
+    proc = subprocess.run(
+        ["cargo", "run", "--quiet", "--example", name, "--", str(seed)],
+        cwd=crate,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode == 0:
+        return False, "replay exited 0 — the seed did not crash the parser"
+    want = entry.get("panics_with", "")
+    if want and want not in proc.stderr:
+        return False, f"crashed, but not with {want!r}"
+    return True, "crashed as declared"
+
+
+def main() -> int:
+    found = targets()
+    if not found:
+        # ADR-F060. Exits 0 — there is nothing to fail on — but never says "ok",
+        # because "no targets" and "every target verified" are different claims
+        # and only one of them is a result.
+        print("fuzz-seeds: NOT APPLICABLE (no fuzz targets in the tree)")
+        print("  This is not a pass. It reports that nothing was checked.")
+        return 0
+
+    have_cargo = shutil.which("cargo") is not None
+    fail = 0
+    verified = 0
+    structure_only = 0
+
+    for crate, target in found:
+        name = target.stem
+        label = f"{crate.relative_to(ROOT)}:{name}"
+        spec = declared(crate).get(name)
+        if not spec:
+            print(f"FAIL {label}: no entry in fuzz/known-crash.toml", file=sys.stderr)
+            fail += 1
+            continue
+
+        seed = crate / "fuzz" / "corpus" / name / spec.get("seed", "")
+        if not seed.is_file():
+            print(f"FAIL {label}: declared seed {seed.name!r} is missing", file=sys.stderr)
+            fail += 1
+            continue
+
+        if not have_cargo:
+            print(f"  structure  {label} (no cargo; replay not run)")
+            structure_only += 1
+            continue
+
+        ok, detail = replay(crate, spec, seed)
+        if ok:
+            print(f"  verified   {label}: {detail}")
+            verified += 1
+        else:
+            print(f"FAIL {label}: {detail}", file=sys.stderr)
+            fail += 1
+
+    if fail:
+        print(
+            "\nA fuzz target that cannot be shown to reach its parser reports "
+            "zero crashes\nfor the same reason a missing detector reports zero "
+            "findings (ADR-F026, ADR-F058).",
+            file=sys.stderr,
+        )
+        return 1
+
+    if structure_only:
+        # Same discipline as the no-inputs case: half a check is not a pass.
+        print(
+            f"fuzz-seeds: STRUCTURE ONLY ({structure_only} target(s) have a seed "
+            "and a declared\n  expectation; no replay was run, so nothing was "
+            "shown to reach a parser)."
+        )
+        return 0
+
+    print(f"fuzz-seeds: ok ({verified} target(s) crashed on their seeds)")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

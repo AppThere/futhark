@@ -31,3 +31,4 @@ spikes/f1-multicol/corpus/book/
 
 # Spike F1c Tauri probe build artifacts
 spikes/f1c-custom-scheme/tauri/target/
+spikes/fuzz-seed-fixture/target/

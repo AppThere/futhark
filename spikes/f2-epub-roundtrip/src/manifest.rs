@@ -244,7 +244,44 @@ pub struct Summary {
     pub normalization_signals: BTreeMap<String, usize>,
 }
 
+/// Classes whose fixture gap is a property of the *synthetic writer*, not of
+/// the instrument (ADR-F061).
+///
+/// The fixture builder pins timestamps and cannot vary deflate level, so
+/// neither class can have a fixture — but real libraries carry both freely, and
+/// the first `rbook` run observed `timestamp` on `mimetype` immediately. So the
+/// gap is contingent, and it must dissolve on the first real corpus.
+///
+/// Written down now, while it is a prediction. Read after the run it would be a
+/// rationalisation, and the two are indistinguishable once the number is on the
+/// screen.
+pub const CONTINGENT_GAPS: &[&str] = &["timestamp", "compression-level"];
+
+/// Books below which a zero for a contingent gap says nothing.
+///
+/// Timestamp variation between a source and a rewritten copy is near-universal
+/// — any writer that does not deliberately pin them produces it. Fifty books
+/// from a real library all agreeing is not a quiet corpus; it is a writer or a
+/// classifier normalising, and either is a finding.
+pub const CONTINGENT_GAP_MIN_BOOKS: usize = 50;
+
 impl Summary {
+    /// Contingent gaps that failed to dissolve (ADR-F061).
+    ///
+    /// Empty below [`CONTINGENT_GAP_MIN_BOOKS`], because a small corpus that
+    /// happens not to exercise a class is the ordinary case and reporting it
+    /// would train the reader to skip the line.
+    pub fn undissolved_contingent_gaps(&self) -> Vec<&'static str> {
+        if self.total < CONTINGENT_GAP_MIN_BOOKS {
+            return Vec::new();
+        }
+        CONTINGENT_GAPS
+            .iter()
+            .copied()
+            .filter(|slug| self.by_class.get(*slug).copied().unwrap_or(0) == 0)
+            .collect()
+    }
+
     /// Render the human-facing report.
     pub fn render(&self) -> String {
         let mut s = String::new();

@@ -40,6 +40,7 @@ pub mod normalization;
 pub mod producer;
 pub mod provenance;
 pub mod roundtrip;
+pub mod scratch;
 pub mod selftest;
 pub mod taxonomy;
 pub mod verdict;
