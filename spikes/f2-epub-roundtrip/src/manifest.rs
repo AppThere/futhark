@@ -284,7 +284,18 @@ impl Summary {
                 Group::DeclaredActual => "C declared",
                 Group::Unclassified => "U unnamed ",
             };
-            s.push_str(&format!("  {group}  {:<24} {n}\n", c.slug()));
+            // ADR-F058: a reported zero is a measurement only where something
+            // can produce a non-zero. Printing `0` for a class the classifier
+            // cannot emit states a result nothing measured — which is exactly
+            // what `manifest-mismatch: 0` did for the whole life of this
+            // instrument, from inside a histogram designed to be honest about
+            // empty buckets.
+            let count = if n == 0 && !c.classifier_emitted() {
+                "— hand-entered only; not measured (ADR-F041)".to_owned()
+            } else {
+                n.to_string()
+            };
+            s.push_str(&format!("  {group}  {:<24} {count}\n", c.slug()));
         }
         s.push_str("\nproducers (all files):\n");
         for (p, n) in &self.producers {

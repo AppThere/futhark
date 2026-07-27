@@ -76,8 +76,19 @@ fn describe(classes: &[Class]) -> String {
 /// path the self-test uses. ADR-F053 wants witnesses reached through the real
 /// code path; a test that built its own reader would be witnessing itself.
 pub fn read_bytes(bytes: &[u8]) -> Result<Archive> {
+    // Keyed by content *and* by a per-call counter and the process id. Content
+    // alone collides the moment two tests read the same fixture concurrently:
+    // one finishes, removes the file, and the other reads a truncated archive
+    // or none at all. That surfaced as `InvalidArchive` in an unrelated test the
+    // first time a third caller was added.
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let mut path = std::env::temp_dir();
-    path.push(format!("f2-{:x}.zip", fnv(bytes)));
+    path.push(format!(
+        "f2-{:x}-{}-{n}.zip",
+        fnv(bytes),
+        std::process::id()
+    ));
     std::fs::write(&path, bytes).map_err(|e| F2Error::Io {
         path: path.display().to_string(),
         source: e,

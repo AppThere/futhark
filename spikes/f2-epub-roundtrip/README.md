@@ -198,6 +198,38 @@ anchored to the attribute position. A detector that fires on everything cannot
 separate the populations it exists to separate — which is why "stays silent on a
 clean file" is a test rather than an assumption.
 
+A zero in this histogram is a claim, and it is only a measurement where
+something can produce a non-zero (ADR-F058). `manifest-mismatch` printed a
+confident `0` for the whole life of this instrument because the class was frozen
+into the taxonomy with no detector behind it — the zero was produced by missing
+code, not by the containers. The reporting design is what made it loud: the
+summary prints empty buckets on purpose, because an absent class and a
+zero-count class are different claims. The better the reporting, the louder the
+lie.
+
+So `tests/reachability.rs` requires every class the report prints as a *number*
+to be observed non-zero through `classify`. That is stricter than a reachability
+witness: a variant needs to be reachable, a count needs to be **reached**.
+`timestamp` and `compression-level` have no fixture and never will — the fixture
+writer pins both as control variables — so the test drives them through
+`classify` on hand-built archives instead. The control survives and the count is
+still measured.
+
+One class answers honestly that it is never reached: `unclassified`.
+`content_divergence` names every byte difference, ending at `content-byte-diff`
+("differs, and none of the narrower explanations fit"), so the classifier cannot
+reach the escape hatch. It exists for ADR-F041's Tier B annotation, where a
+*human* records something the taxonomy cannot name. The report says that rather
+than printing `0`:
+
+```
+  U unnamed   unclassified             — hand-entered only; not measured (ADR-F041)
+```
+
+A second test asserts the classifier really cannot reach it, because marking a
+measured class unmeasured would understate a real result — the same bug
+mirrored, and just as quiet.
+
 Two properties are load-bearing and both are enforced by tests:
 
 - **`unclassified` counts as a failure.** An observation the instrument cannot

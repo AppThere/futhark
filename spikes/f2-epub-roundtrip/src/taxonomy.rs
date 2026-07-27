@@ -136,6 +136,25 @@ impl Class {
         matches!(self.group(), Group::EntryContent | Group::Unclassified)
     }
 
+    /// Whether `classify` can emit this class at all (ADR-F058, ADR-F059).
+    ///
+    /// Freezing the taxonomy certified the vocabulary, not the implementation.
+    /// `ManifestMismatch` sat in the frozen list from the start with no detector
+    /// behind it, contributing `manifest-mismatch: 0` to every histogram ever
+    /// printed — a zero produced by missing code rather than by the containers.
+    ///
+    /// `Unclassified` is the one class that legitimately answers `false`.
+    /// `content_divergence` names every byte difference, ending at
+    /// `ContentByteDiff` — "differs, and none of the narrower explanations fit"
+    /// — so the classifier never reaches the escape hatch. It exists for
+    /// ADR-F041's Tier B annotation, where a *human* records an observation the
+    /// taxonomy cannot name. Its zero in a classifier-driven histogram measures
+    /// nothing, and [`crate::manifest::Summary::render`] says so rather than
+    /// printing the number.
+    pub const fn classifier_emitted(self) -> bool {
+        !matches!(self, Self::Unclassified)
+    }
+
     /// Stable slug for manifests and reports.
     pub const fn slug(self) -> &'static str {
         match self {

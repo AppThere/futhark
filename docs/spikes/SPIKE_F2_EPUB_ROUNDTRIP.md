@@ -10,9 +10,9 @@ SPDX-License-Identifier: Apache-2.0
 | Document | `SPIKE_F2_EPUB_ROUNDTRIP.md` |
 | Spike ID | F2 |
 | Status | **Screening result returned on synthetic input. ADR-F011 reversed in spec 0.12.0 on this evidence. F2b instrument built; not yet run against real books.** |
-| Version | 0.5.0 |
+| Version | 0.6.0 |
 | Date | 2026-07-27 |
-| Depends on | `FUTHARK_PROGRAM_SPEC.md` 0.16.0 — §10, R5, ADR-F012, ADR-F026, ADR-F036, ADR-F041, ADR-F047, ADR-F048, ADR-F050—F057 |
+| Depends on | `FUTHARK_PROGRAM_SPEC.md` 0.17.0 — §10, R5, ADR-F012, ADR-F026, ADR-F036, ADR-F041, ADR-F047, ADR-F048, ADR-F050—F059 |
 | Harness | `spikes/f2-epub-roundtrip/` |
 | Raw results | `f2-manifest.json`, regenerated per run |
 
@@ -261,6 +261,29 @@ what found the cause.
 The detector now checks every non-remote `<item href>` in the round-trip's
 manifest against the entries present. Removing it fails two fixtures, which is
 the control.
+
+The generalisation is ADR-F058, and it is stricter than ADR-F053: a *variant*
+needs to be reachable; a *reported count* needs to be reached. `Class::ALL` is
+iterated into every histogram this instrument prints, so the test now requires
+each class the report renders as a number to be observed non-zero through
+`classify`. `timestamp` and `compression-level` get there on hand-built
+archives — the fixture writer pins them as control variables and that stays
+true, but the pinning is a property of the builder, not of the instrument.
+
+ADR-F059 names what the freeze did and did not certify. ADR-F041 froze the class
+list so the instrument could not be fitted to its own data, which was right and
+remains right. It carried no claim that each class is *measured*, while reading
+exactly as though it did — which is how a class sat in the vocabulary for the
+whole project with nothing behind it.
+
+Auditing the rest turned up a second one, and it is honest rather than broken.
+`Class::Unclassified` is also unreachable from `classify`: `content_divergence`
+names every byte difference, ending at `ContentByteDiff`. The escape hatch is
+for ADR-F041's Tier B annotation, where a human records what the taxonomy cannot
+name. So its zero is not a measurement either, and `Summary::render` now says
+`— hand-entered only; not measured` instead of printing `0`. A second test
+asserts the classifier genuinely cannot reach it: marking a measured class
+unmeasured would understate a real result, which is the same bug mirrored.
 
 The other two were what they looked like. `declared-size-mismatch` needed a
 container that lies about itself — no zip writer emits one, so the fixture

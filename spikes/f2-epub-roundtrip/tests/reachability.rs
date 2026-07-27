@@ -124,11 +124,18 @@ enum Kind {
 /// missing check rather than by the containers.
 const PENDING_WITNESS: &[(&str, &str)] = &[];
 
-/// Divergence classes the fixture corpus cannot produce, and why.
+/// Divergence classes the *fixture corpus* cannot produce, and why.
 ///
 /// Named rather than counted, so adding a fixture forces this list to shrink
 /// and a fixture that stops working forces it to grow. A bare "11 of 17
 /// covered" would move without anyone having to say what moved.
+///
+/// Not the same list as ADR-F058's. This one is about fixtures; that one is
+/// about whether a class is ever *reached*. `timestamp` and `compression-level`
+/// are on this list and not on that one — no fixture can produce them, because
+/// the fixture writer pins both as its control variables, but
+/// `every_class_the_report_prints_as_a_number_is_reached` drives them through
+/// `classify` directly. The control survives and the count is still measured.
 const CLASS_NO_WITNESS: &[(&str, Kind, &str)] = &[
     (
         "timestamp",
@@ -151,6 +158,92 @@ const CLASS_NO_WITNESS: &[(&str, Kind, &str)] = &[
          and `tests/instrument.rs` asserts it counts as a failure when it fires",
     ),
 ];
+
+/// Two archives differing in exactly one piece of container metadata, for the
+/// classes the fixture writer holds constant on purpose.
+fn pair_differing_in(f: impl Fn(&mut Entry)) -> (Archive, Archive) {
+    let a = Archive {
+        entries: vec![
+            entry("mimetype", b"application/epub+zip"),
+            entry("OEBPS/ch1.xhtml", b"<html/>"),
+        ],
+        comment: String::new(),
+    };
+    let mut b = a.clone();
+    if let Some(e) = b.entries.iter_mut().find(|e| e.name == "OEBPS/ch1.xhtml") {
+        f(e);
+    }
+    (a, b)
+}
+
+/// ADR-F058: a reported zero is a measurement only where something can produce
+/// a non-zero.
+///
+/// `Summary::render` prints a count for every class, including the empty ones,
+/// because an absent class and a zero-count class are different claims. That
+/// design is right and it is exactly what turned `ManifestMismatch` — frozen in
+/// the taxonomy with no detector behind it — into a confident `0` in every
+/// histogram this instrument ever printed. The better the reporting, the louder
+/// the lie.
+///
+/// So every class the report prints as a *number* must be observed non-zero
+/// here, through `classify`. This is stricter than ADR-F053: a variant needs to
+/// be reachable, a count needs to be reached.
+#[test]
+fn every_class_the_report_prints_as_a_number_is_reached() {
+    let mut reached: BTreeSet<&'static str> = BTreeSet::new();
+    for f in fixtures::all().expect("fixtures build") {
+        let a = selftest::read_bytes(&f.source).expect("source readable");
+        let b = selftest::read_bytes(&f.roundtrip).expect("roundtrip readable");
+        for d in classify(&a, &b) {
+            reached.insert(d.class.slug());
+        }
+    }
+
+    // The two the fixture writer pins. Driven through `classify` on hand-built
+    // archives instead, which is the classifier's real input type — the pinning
+    // is a property of the fixture builder, not of the instrument.
+    let (a, b) = pair_differing_in(|e| e.modified = Some("2020-01-01".to_owned()));
+    for d in classify(&a, &b) {
+        reached.insert(d.class.slug());
+    }
+    let (a, b) = pair_differing_in(|e| e.compressed_size += 7);
+    for d in classify(&a, &b) {
+        reached.insert(d.class.slug());
+    }
+
+    let want: BTreeSet<&str> = Class::ALL
+        .iter()
+        .filter(|c| c.classifier_emitted())
+        .map(|c| c.slug())
+        .collect();
+    assert_eq!(
+        reached, want,
+        "a class the report prints as a number, that no test has seen non-zero, \
+         is reporting the absence of a code path as the absence of a finding",
+    );
+}
+
+/// The control for the list above. If `classify` ever *could* emit
+/// `Unclassified`, marking it unmeasured in the report would understate a real
+/// result — the mirror of the bug, and just as quiet.
+#[test]
+fn the_escape_hatch_is_not_reachable_through_classify() {
+    assert!(!Class::Unclassified.classifier_emitted());
+    let mut seen = false;
+    for f in fixtures::all().expect("fixtures build") {
+        let a = selftest::read_bytes(&f.source).expect("source readable");
+        let b = selftest::read_bytes(&f.roundtrip).expect("roundtrip readable");
+        seen |= classify(&a, &b)
+            .iter()
+            .any(|d| d.class == Class::Unclassified);
+    }
+    assert!(
+        !seen,
+        "classify reached the escape hatch, so it is measured after all and \
+         must stop being reported as hand-entered only",
+    );
+}
 
 #[test]
 fn the_classes_without_a_fixture_witness_are_exactly_the_named_ones() {
