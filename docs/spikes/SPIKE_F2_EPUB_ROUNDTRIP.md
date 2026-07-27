@@ -10,9 +10,9 @@ SPDX-License-Identifier: Apache-2.0
 | Document | `SPIKE_F2_EPUB_ROUNDTRIP.md` |
 | Spike ID | F2 |
 | Status | **Screening result returned on synthetic input. ADR-F011 reversed in spec 0.12.0 on this evidence. F2b instrument built; not yet run against real books.** |
-| Version | 0.4.0 |
+| Version | 0.5.0 |
 | Date | 2026-07-27 |
-| Depends on | `FUTHARK_PROGRAM_SPEC.md` 0.15.0 — §10, R5, ADR-F012, ADR-F036, ADR-F041, ADR-F047, ADR-F048, ADR-F050—F056 |
+| Depends on | `FUTHARK_PROGRAM_SPEC.md` 0.16.0 — §10, R5, ADR-F012, ADR-F026, ADR-F036, ADR-F041, ADR-F047, ADR-F048, ADR-F050—F057 |
 | Harness | `spikes/f2-epub-roundtrip/` |
 | Raw results | `f2-manifest.json`, regenerated per run |
 
@@ -243,7 +243,35 @@ counted by family rather than by string because "InDesign 17" and "InDesign 19"
 are one toolchain. The verdict names the families it counted: **a threshold can
 only be trusted or not; a named list can be argued with.**
 
-### 7.3 The catalogue ADR is F052
+### 7.3 A frozen class with no detector
+
+Writing the last three fixtures (D15) turned up something the coverage framing
+had hidden. `Class::ManifestMismatch` was frozen at classifier 1.0.0 and **had
+no code path**: `producer.rs` collected `manifest_hrefs` "for the
+`ManifestMismatch` check", and the check was never written. Every run reported
+`manifest-mismatch: 0`.
+
+A zero in a histogram is read as a measurement. This one was produced by the
+absence of a detector — the `Tier::Fixture` shape, except that a dead *class*
+does not merely over-promise in a schema, it contributes a confident-looking
+number to every result. It is also why "no fixture written" was the wrong
+diagnosis: the missing fixture was a symptom, and looking for one to write is
+what found the cause.
+
+The detector now checks every non-remote `<item href>` in the round-trip's
+manifest against the entries present. Removing it fails two fixtures, which is
+the control.
+
+The other two were what they looked like. `declared-size-mismatch` needed a
+container that lies about itself — no zip writer emits one, so the fixture
+patches the central directory's uncompressed-size field and leaves the CRC
+correct, giving a header that contradicts its entry rather than a corrupt
+archive. `extra-field` writes a `0x5455` extended-timestamp field on one side.
+
+Both malformed-input classes now have witnesses, which ADR-F026 and the
+no-panics standard want independently of F2.
+
+### 7.4 The catalogue ADR is F052
 
 Spec 0.13.0 minted two ADRs numbered F050. Resolved at 0.13.1: the
 producer-family rule is older and keeps the number; the feature catalogue is

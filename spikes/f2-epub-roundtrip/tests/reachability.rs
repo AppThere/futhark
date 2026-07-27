@@ -98,12 +98,31 @@ enum Kind {
     ByNature,
     /// A witness would have to be invented, and would witness the invention.
     WithoutFabrication,
-    /// The fixture writer structurally cannot produce it.
+    /// The fixture writer structurally cannot produce it, because producing it
+    /// would mean giving up a control variable.
     BeyondTheHarness,
-    /// Witnessable; nobody has written it. The response is to write it, not to
-    /// document it — this kind should shrink.
-    NotYetWritten,
 }
+
+/// ADR-F057: coverage debt, deliberately *not* a [`Kind`].
+///
+/// Every kind above states a permanent property — of the variant, or of the
+/// harness. An unwritten fixture states a schedule. Listing them together makes
+/// a backlog item look like a classification, and invites the failure this
+/// project keeps finding: a taxonomy that reads complete because an item
+/// migrated rather than because work happened.
+///
+/// **Entry rule.** An id may be added here only when its class is newly
+/// declared — declared in a classifier version later than the freeze — and
+/// never by migration from a [`Kind`]. The way out is to write the fixture. A
+/// pinned list can be re-sorted; an entry rule cannot.
+///
+/// Empty as of classifier 1.0.0. The three that were here — `extra-field`,
+/// `declared-size-mismatch`, `manifest-mismatch` — left by having their
+/// fixtures written, which is the only exit. `manifest-mismatch` needed a
+/// detector first: the class had been frozen since 1.0.0 with no code path,
+/// so every run reported it zero times and the zero was produced by the
+/// missing check rather than by the containers.
+const PENDING_WITNESS: &[(&str, &str)] = &[];
 
 /// Divergence classes the fixture corpus cannot produce, and why.
 ///
@@ -122,23 +141,6 @@ const CLASS_NO_WITNESS: &[(&str, Kind, &str)] = &[
         Kind::BeyondTheHarness,
         "requires two writers at different deflate levels, which the in-memory \
          fixture writer has no way to vary",
-    ),
-    (
-        "extra-field",
-        Kind::NotYetWritten,
-        "no fixture writes a zip extra field, and one could",
-    ),
-    (
-        "declared-size-mismatch",
-        Kind::NotYetWritten,
-        "requires a container whose central directory lies about a size — a \
-         hand-built malformed archive rather than a writer's output",
-    ),
-    (
-        "manifest-mismatch",
-        Kind::NotYetWritten,
-        "requires an OPF manifest disagreeing with the entries present; the \
-         fixture base plan keeps them consistent",
     ),
     (
         "unclassified",
@@ -166,7 +168,11 @@ fn the_classes_without_a_fixture_witness_are_exactly_the_named_ones() {
         .map(|c| c.slug())
         .filter(|s| !reached.contains(s))
         .collect();
-    let declared: BTreeSet<&str> = CLASS_NO_WITNESS.iter().map(|(id, _, _)| *id).collect();
+    let declared: BTreeSet<&str> = CLASS_NO_WITNESS
+        .iter()
+        .map(|(id, _, _)| *id)
+        .chain(PENDING_WITNESS.iter().map(|(id, _)| *id))
+        .collect();
 
     assert_eq!(
         unreached, declared,
@@ -379,22 +385,27 @@ fn every_declared_gap_carries_a_kind_and_a_reason() {
     }
 }
 
-/// `NotYetWritten` is the only kind that should move. The other three describe
-/// the world; this one describes a to-do, and a list that never shrinks is a
-/// list nobody is reading. The assertion is on the count so that closing one
-/// forces the number down rather than letting the list quietly stay the size it
-/// was.
+/// ADR-F057's entry rule, as far as a test can hold it: nothing may sit in
+/// both places, which is what a migration would look like from here.
+///
+/// The other half of the rule — that an id enters only when its class is newly
+/// declared — bites at classifier 1.0.0 as "the list must be empty", because
+/// every class in the frozen taxonomy has already had its chance. A class added
+/// in a later version may enter; one frozen since 1.0.0 may not.
 #[test]
-fn the_writable_gaps_are_the_ones_still_outstanding() {
-    let outstanding: Vec<&str> = CLASS_NO_WITNESS
-        .iter()
-        .chain(OUTCOME_NO_WITNESS)
-        .filter(|(_, k, _)| *k == Kind::NotYetWritten)
-        .map(|(id, _, _)| *id)
-        .collect();
-    assert_eq!(
-        outstanding,
-        ["extra-field", "declared-size-mismatch", "manifest-mismatch"],
-        "write the fixture and shorten this list; do not reclassify the kind",
+fn coverage_debt_is_held_outside_the_kinds() {
+    let kinds: BTreeSet<&str> = CLASS_NO_WITNESS.iter().map(|(id, _, _)| *id).collect();
+    for (id, _) in PENDING_WITNESS {
+        assert!(
+            !kinds.contains(id),
+            "{id} is in both the kinds and the debt list — one of those is a \
+             migration, and ADR-F057 forbids entry by migration",
+        );
+    }
+    assert!(
+        PENDING_WITNESS.is_empty(),
+        "the taxonomy is frozen at classifier {}, so every class in it has had \
+         its chance. Write the fixture; do not reclassify.",
+        futhark_f2::taxonomy::CLASSIFIER_VERSION,
     );
 }

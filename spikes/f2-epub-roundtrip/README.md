@@ -146,13 +146,30 @@ it, since a directly-constructed variant witnesses the `enum` keyword.
 
 The audit found three genuine gaps, and they are named rather than counted:
 
-- **Six divergence classes have no fixture** — `timestamp` (the fixture writer
-  pins timestamps on purpose so every other class is measured against a
-  constant), `compression-level`, `extra-field`, `declared-size-mismatch`,
-  `manifest-mismatch`, and `unclassified`. The last is unwitnessable by nature:
-  a fixture for it would be a fixture for the classifier's own blind spot. The
-  test asserts the unreached set equals the declared set exactly, so the gap
-  cannot change size quietly in either direction.
+- **Three divergence classes have no fixture, and the reasons differ in kind**
+  (ADR-F056). `timestamp` and `compression-level` are *beyond the harness*: the
+  fixture writer pins timestamps so every other class is measured against a
+  constant, and closing that gap means giving up the control. `unclassified` is
+  unwitnessable *by nature* — a fixture for it would be a fixture for the
+  classifier's own blind spot. The test asserts the unreached set equals the
+  declared set exactly, so the gap cannot change size quietly in either
+  direction.
+
+  Three others were listed here and are not any more, because their fixtures got
+  written rather than reclassified (ADR-F057). `extra-field` writes a `0x5455`
+  extended-timestamp field on one side; `declared-size-mismatch` patches the
+  central directory to claim a size the entry does not have, leaving the CRC
+  correct so the archive still opens; `manifest-mismatch` declares a phantom
+  `<item href>` on both sides, which isolates the class from the
+  `content-byte-diff` that changing one OPF would produce.
+
+  **`manifest-mismatch` needed a detector before it could have a fixture.** The
+  class had been frozen since classifier 1.0.0 with no code path — `producer.rs`
+  had been collecting `manifest_hrefs` "for the `ManifestMismatch` check" the
+  whole time — so every run reported `manifest-mismatch: 0` and the zero was
+  produced by the missing check rather than by the containers. A histogram
+  bucket that can never fill is the `Tier::Fixture` shape wearing a
+  measurement's clothes.
 - **`Outcome::WriteFailed` and `Outcome::Panicked` have no witness.** Both need
   an input that defeats `rbook` in a specific way, and one invented for the test
   would witness the invention rather than the reader. `ReadFailed` does have one
@@ -238,7 +255,8 @@ extra one over-classification.
 | `src/family.rs` | ADR-F050: producer families, not strings. Unrecognised producers get their own family rather than being merged. |
 | `src/normalization.rs` | R27: was this file rewritten by a manager? Detected without the producer string. |
 | `src/manifest.rs` | The publishable artifact (ADR-F038). Carries no book bytes. |
-| `src/fixtures.rs` | One known class per fixture. How the instrument is validated. |
+| `src/fixtures.rs` | The container builder: plans, zip options, and the byte-level patch that makes a header lie. |
+| `src/fixture_cases.rs` | The 15 cases themselves — the part a reviewer checks against the taxonomy. |
 | `tests/instrument.rs` | Runs the fixtures in CI so drift fails the build. |
 | `src/roundtrip.rs` | Open with rbook, write back untouched. A panic is a finding, not a crash. |
 | `src/verdict.rs` | ADR-F047 as a type. There is no `Verdict::Pass`. |

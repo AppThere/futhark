@@ -32,6 +32,7 @@ pub mod corpus;
 pub mod detect;
 pub mod error;
 pub mod family;
+pub mod fixture_cases;
 pub mod fixtures;
 pub mod floor;
 pub mod manifest;

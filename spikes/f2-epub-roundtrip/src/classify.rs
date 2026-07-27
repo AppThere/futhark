@@ -197,6 +197,52 @@ fn check_ocf_invariants(roundtrip: &Archive, out: &mut Vec<Divergence>) {
             ));
         }
     }
+
+    check_manifest(roundtrip, out);
+}
+
+/// Every `<item href>` in the OPF manifest must resolve to an entry.
+///
+/// This detector did not exist until ADR-F057's audit went looking for a
+/// fixture and found there was nothing to write one against. `producer.rs` had
+/// been collecting `manifest_hrefs` "for the `ManifestMismatch` check" since the
+/// class was frozen, and the check was never written — so every run reported
+/// `manifest-mismatch: 0`, and a reader took that for a measurement. A class
+/// with no code path is the `Tier::Fixture` shape wearing a histogram's clothes:
+/// the zero is produced by the absence of a detector, not by the absence of the
+/// thing.
+///
+/// Only the round-trip is examined, for the same reason as the rest of
+/// `check_ocf_invariants` — a writer that drops a manifested file has produced
+/// an invalid container whatever the source did.
+fn check_manifest(roundtrip: &Archive, out: &mut Vec<Divergence>) {
+    let pkg = crate::producer::read_package(roundtrip);
+    if pkg.manifest_hrefs.is_empty() {
+        return;
+    }
+    // Hrefs are relative to the OPF's own directory.
+    let base = roundtrip
+        .entries
+        .iter()
+        .find(|e| e.name.to_ascii_lowercase().ends_with(".opf"))
+        .and_then(|e| e.name.rsplit_once('/'))
+        .map(|(dir, _)| format!("{dir}/"))
+        .unwrap_or_default();
+
+    for href in &pkg.manifest_hrefs {
+        // Remote resources are the sandbox's problem, not the container's.
+        if href.contains("://") {
+            continue;
+        }
+        let path = format!("{base}{href}");
+        if roundtrip.get(&path).is_none() {
+            out.push(Divergence::entry(
+                Class::ManifestMismatch,
+                &path,
+                format!("manifest declares {href}, container has no such entry"),
+            ));
+        }
+    }
 }
 
 fn strip_bom(data: &[u8]) -> &[u8] {
