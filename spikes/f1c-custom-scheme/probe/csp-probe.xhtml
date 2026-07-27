@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<!--
+SPDX-FileCopyrightText: 2026 Kevin Carlson
+SPDX-License-Identifier: Apache-2.0
+
+R24 probe. Attempts one load of each resource class and reports which the engine
+permitted, under whatever CSP the server was told to serve with this document.
+Kept separate from content.xhtml: that one compares transports, this one compares
+policies, and conflating them would make neither readable.
+-->
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>F1c CSP matrix probe</title>
+<link rel="stylesheet" type="text/css" href="book.css"/>
+</head>
+<body>
+<h1 id="css-probe">csp probe</h1>
+<img id="img-probe" src="probe.png" alt="" width="8" height="8"/>
+<script src="ext-marker.js"></script>
+<script src="csp-probe.js"></script>
+<pre id="out">running…</pre>
+</body>
+</html>

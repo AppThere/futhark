@@ -160,10 +160,24 @@
     // relative href did not resolve.
     return colour;
   });
+  // Read on load/error, never synchronously. `complete` is false for an image
+  // that is merely still in flight, so a synchronous check reports "not loaded"
+  // for a perfectly permitted resource — which is exactly the artifact that
+  // produced the retracted ordering finding. Timing is not policy.
   check('relativeImageLoaded', function () {
     var img = document.getElementById('img-probe');
     if (!img) return 'probe element missing';
-    return img.complete && img.naturalWidth > 0 ? 'loaded ' + img.naturalWidth + 'px' : 'NOT loaded';
+    if (img.complete) {
+      return img.naturalWidth > 0 ? 'loaded ' + img.naturalWidth + 'px' : 'NOT loaded';
+    }
+    results.relativeImageLoaded = { ok: true, value: 'pending' };
+    img.addEventListener('load', function () {
+      results.relativeImageLoaded = { ok: true, value: 'loaded ' + img.naturalWidth + 'px' };
+    });
+    img.addEventListener('error', function () {
+      results.relativeImageLoaded = { ok: false, value: 'NOT loaded' };
+    });
+    return 'pending';
   });
 
   check('userAgent', function () { return navigator.userAgent; });

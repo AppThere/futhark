@@ -108,7 +108,7 @@
     },
     "relativeImageLoaded": {
       "ok": true,
-      "value": "NOT loaded"
+      "value": "loaded 8px"
     },
     "xhr": {
       "threw": "NetworkError",

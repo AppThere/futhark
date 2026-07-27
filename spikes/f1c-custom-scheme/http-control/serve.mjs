@@ -88,10 +88,16 @@ const appServer = createServer(async (req, res) => {
 const contentServer = createServer(async (req, res) => {
   const url = new URL(req.url, CONTENT_ORIGIN);
   const found = await asset(url.pathname);
-  send(res, found, { 'content-security-policy': CSP, 'x-content-type-options': 'nosniff' },
-    found?.ext === '.xhtml'
-      ? (s) => s.replace('data-transport="unknown"', 'data-transport="http"')
-      : null);
+  // The R24 sweep drives the policy from the query so a hundred permutations
+  // cost one server. Only the document's header matters for enforcement, so
+  // subresources are served plainly.
+  const override = url.searchParams.get('csp');
+  send(res, found, {
+    'content-security-policy': override && found?.ext === '.xhtml' ? override : CSP,
+    'x-content-type-options': 'nosniff',
+  }, found?.ext === '.xhtml'
+    ? (s) => s.replace('data-transport="unknown"', 'data-transport="http"')
+    : null);
 });
 
 export function start() {

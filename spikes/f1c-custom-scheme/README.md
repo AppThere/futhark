@@ -34,10 +34,13 @@ cd tauri && cargo run                           # prints the JSON, writes f1c-re
 The control uses F1's engine adapters, so it needs `npm install` to have been run
 once in `../f1-multicol`.
 
-`F1C_CSP_IMG` overrides the `img-src` directive, which is how the WebKit CSP
-finding in §5 of the findings document was bisected. The same trick works for any
-directive worth isolating — add a knob rather than editing the policy by hand,
-so the default stays honest.
+```bash
+node http-control/csp-matrix.mjs                # R24: policy permutation sweep
+```
+
+The matrix sweeps CSP permutations and judges each against what the standard
+requires: fail-open, over-blocking, malformed-list hazard, or the R25 canary. The
+runner owns the expectations; the probe only reports what loaded.
 
 ## Status of the Tauri shell
 
@@ -58,12 +61,28 @@ exists to answer one question about origin semantics and then to be evidence.
 | `probe/content.xhtml` | Content document. Everything it references is relative, deliberately — that is ADR-F007's claim under test. |
 | `http-control/serve.mjs` | Two-origin control server, same CSP shape as the Rust handler. |
 | `http-control/run.mjs` | Drives the control on F1's engine adapters. |
+| `http-control/csp-matrix.mjs` | R24 policy sweep. Owns the expectations; the probe only reports. |
+| `probe/csp-probe.js` | Attempts one load of each resource class and reports which were permitted. |
 | `tauri/src/main.rs` | The scheme handler. On macOS this is `WKURLSchemeHandler`, which is the entire point. |
 
 ## Why the control is permanent, not scaffolding
 
-It found a reproducible WebKit CSP bug — a host-source silently stops matching
-when a keyword precedes it in the same directive — before any Mac time was spent,
-and in a directive Spike F1 never exercised. Per-engine CSP behaviour is not
-something to reason about from the specification. Keep the control, and run it on
-every engine that ships.
+It has caught three measurement errors that would otherwise have become findings,
+and one real difference:
+
+- A synchronous `img.complete` check reported a permitted image as blocked, which
+  produced a WebKit "CSP ordering bug" that does not exist. Retracted in §5.1 of
+  the findings.
+- A stale `postMessage` result satisfied the wait for the next policy, producing a
+  `default-src 'none'` fail-open that does not exist. Results are nonce-keyed now.
+- Judging a WebSocket by its constructor rather than its connection made Chromium
+  look permissive when it is not.
+- Real: `'self'` matches nothing in an opaque-origin frame on WebKit, and does
+  match on Chromium. The content CSP names the origin explicitly and never relies
+  on `'self'`.
+
+The pattern in the first three is the same — **a synchronous check of an
+asynchronous outcome is not a measurement** — and it is why every resource-load
+check in the probe now settles on `load`/`error`. Per-engine CSP behaviour is not
+something to reason about from the specification, and a probe's own results are
+not something to trust without a control that can show it lying.

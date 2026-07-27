@@ -1,0 +1,691 @@
+{
+  "engine": "webkitgtk",
+  "version": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15",
+  "platform": "linux-x64",
+  "cases": [
+    {
+      "id": "backstop-none",
+      "csp": "default-src 'none'",
+      "expect": {
+        "externalScript": "deny",
+        "inlineScript": "deny",
+        "evalAllowed": "deny",
+        "externalStyle": "deny",
+        "image": "deny",
+        "fetch": "deny",
+        "xhr": "deny"
+      },
+      "note": "The whole sandbox rests on this one line.",
+      "results": {
+        "probeRan": false
+      },
+      "rows": [
+        {
+          "key": "externalScript",
+          "want": "deny",
+          "got": "blocked",
+          "verdict": "ok"
+        },
+        {
+          "key": "inlineScript",
+          "want": "deny",
+          "got": "unobservable",
+          "verdict": "unobservable"
+        },
+        {
+          "key": "evalAllowed",
+          "want": "deny",
+          "got": "unobservable",
+          "verdict": "unobservable"
+        },
+        {
+          "key": "externalStyle",
+          "want": "deny",
+          "got": "unobservable",
+          "verdict": "unobservable"
+        },
+        {
+          "key": "image",
+          "want": "deny",
+          "got": "unobservable",
+          "verdict": "unobservable"
+        },
+        {
+          "key": "fetch",
+          "want": "deny",
+          "got": "unobservable",
+          "verdict": "unobservable"
+        },
+        {
+          "key": "xhr",
+          "want": "deny",
+          "got": "unobservable",
+          "verdict": "unobservable"
+        }
+      ],
+      "failOpen": 0,
+      "hazard": 0
+    },
+    {
+      "id": "none-plus-script-after",
+      "csp": "default-src 'none'; script-src http://127.0.0.1:7202",
+      "expect": {
+        "externalScript": "allow",
+        "inlineScript": "deny",
+        "evalAllowed": "deny",
+        "externalStyle": "deny",
+        "image": "deny",
+        "fetch": "deny"
+      },
+      "note": "Specific directive overrides the default.",
+      "results": {
+        "inlineScript": "blocked",
+        "inlineStyle": "blocked",
+        "fetch": "blocked",
+        "evalAllowed": "blocked",
+        "image": "blocked",
+        "externalScript": "allowed",
+        "xhr": "blocked",
+        "probeRan": true,
+        "externalStyle": "blocked"
+      },
+      "rows": [
+        {
+          "key": "externalScript",
+          "want": "allow",
+          "got": "allowed",
+          "verdict": "ok"
+        },
+        {
+          "key": "inlineScript",
+          "want": "deny",
+          "got": "blocked",
+          "verdict": "ok"
+        },
+        {
+          "key": "evalAllowed",
+          "want": "deny",
+          "got": "blocked",
+          "verdict": "ok"
+        },
+        {
+          "key": "externalStyle",
+          "want": "deny",
+          "got": "blocked",
+          "verdict": "ok"
+        },
+        {
+          "key": "image",
+          "want": "deny",
+          "got": "blocked",
+          "verdict": "ok"
+        },
+        {
+          "key": "fetch",
+          "want": "deny",
+          "got": "blocked",
+          "verdict": "ok"
+        }
+      ],
+      "failOpen": 0,
+      "hazard": 0
+    },
+    {
+      "id": "none-plus-script-before",
+      "csp": "script-src http://127.0.0.1:7202; default-src 'none'",
+      "expect": {
+        "externalScript": "allow",
+        "inlineScript": "deny",
+        "evalAllowed": "deny",
+        "externalStyle": "deny",
+        "image": "deny",
+        "fetch": "deny"
+      },
+      "note": "Same policy, directive order reversed. Order must not matter.",
+      "results": {
+        "inlineScript": "blocked",
+        "inlineStyle": "blocked",
+        "fetch": "blocked",
+        "evalAllowed": "blocked",
+        "image": "blocked",
+        "externalScript": "allowed",
+        "xhr": "blocked",
+        "probeRan": true,
+        "externalStyle": "blocked"
+      },
+      "rows": [
+        {
+          "key": "externalScript",
+          "want": "allow",
+          "got": "allowed",
+          "verdict": "ok"
+        },
+        {
+          "key": "inlineScript",
+          "want": "deny",
+          "got": "blocked",
+          "verdict": "ok"
+        },
+        {
+          "key": "evalAllowed",
+          "want": "deny",
+          "got": "blocked",
+          "verdict": "ok"
+        },
+        {
+          "key": "externalStyle",
+          "want": "deny",
+          "got": "blocked",
+          "verdict": "ok"
+        },
+        {
+          "key": "image",
+          "want": "deny",
+          "got": "blocked",
+          "verdict": "ok"
+        },
+        {
+          "key": "fetch",
+          "want": "deny",
+          "got": "blocked",
+          "verdict": "ok"
+        }
+      ],
+      "failOpen": 0,
+      "hazard": 0
+    },
+    {
+      "id": "duplicate-deny-then-allow",
+      "csp": "default-src 'none'; script-src http://127.0.0.1:7202; img-src 'none'; img-src *",
+      "expect": {
+        "image": "deny"
+      },
+      "note": "CSP: the first occurrence of a directive wins, later duplicates are ignored. A later permissive duplicate winning is fail-open.",
+      "results": {
+        "inlineScript": "blocked",
+        "inlineStyle": "blocked",
+        "fetch": "blocked",
+        "evalAllowed": "blocked",
+        "image": "blocked",
+        "externalScript": "allowed",
+        "xhr": "blocked",
+        "probeRan": true,
+        "externalStyle": "blocked"
+      },
+      "rows": [
+        {
+          "key": "image",
+          "want": "deny",
+          "got": "blocked",
+          "verdict": "ok"
+        }
+      ],
+      "failOpen": 0,
+      "hazard": 0
+    },
+    {
+      "id": "duplicate-allow-then-deny",
+      "csp": "default-src 'none'; script-src http://127.0.0.1:7202; img-src *; img-src 'none'",
+      "expect": {
+        "image": "allow"
+      },
+      "note": "Mirror of the above. Together they pin which duplicate the engine honours.",
+      "results": {
+        "inlineScript": "blocked",
+        "inlineStyle": "blocked",
+        "fetch": "blocked",
+        "evalAllowed": "blocked",
+        "image": "allowed",
+        "externalScript": "allowed",
+        "xhr": "blocked",
+        "probeRan": true,
+        "externalStyle": "blocked"
+      },
+      "rows": [
+        {
+          "key": "image",
+          "want": "allow",
+          "got": "allowed",
+          "verdict": "ok"
+        }
+      ],
+      "failOpen": 0,
+      "hazard": 0
+    },
+    {
+      "id": "none-with-host-after",
+      "csp": "default-src 'none'; script-src http://127.0.0.1:7202; img-src 'none' http://127.0.0.1:7202",
+      "expect": {
+        "image": "deny-intent"
+      },
+      "note": "'none' alongside other sources is a malformed list per the CSP grammar. Both engines ignore the 'none' and honour the rest — permissively, and identically in both orderings. Not an engine bug; a construction hazard (ADR-F039).",
+      "results": {
+        "inlineScript": "blocked",
+        "inlineStyle": "blocked",
+        "fetch": "blocked",
+        "evalAllowed": "blocked",
+        "image": "allowed",
+        "externalScript": "allowed",
+        "xhr": "blocked",
+        "probeRan": true,
+        "externalStyle": "blocked"
+      },
+      "rows": [
+        {
+          "key": "image",
+          "want": "deny-intent",
+          "got": "allowed",
+          "verdict": "HAZARD-permissive"
+        }
+      ],
+      "failOpen": 0,
+      "hazard": 1
+    },
+    {
+      "id": "none-with-host-before",
+      "csp": "default-src 'none'; script-src http://127.0.0.1:7202; img-src http://127.0.0.1:7202 'none'",
+      "expect": {
+        "image": "deny-intent"
+      },
+      "note": "Same list, reversed. The pair is what shows the permissive resolution is order-independent, so this is not the R24 ordering hazard.",
+      "results": {
+        "inlineScript": "blocked",
+        "inlineStyle": "blocked",
+        "fetch": "blocked",
+        "evalAllowed": "blocked",
+        "image": "allowed",
+        "externalScript": "allowed",
+        "xhr": "blocked",
+        "probeRan": true,
+        "externalStyle": "blocked"
+      },
+      "rows": [
+        {
+          "key": "image",
+          "want": "deny-intent",
+          "got": "allowed",
+          "verdict": "HAZARD-permissive"
+        }
+      ],
+      "failOpen": 0,
+      "hazard": 1
+    },
+    {
+      "id": "unknown-keyword-then-none",
+      "csp": "default-src 'none'; script-src http://127.0.0.1:7202; img-src 'unsafe-bogus' 'none'",
+      "expect": {
+        "image": "deny"
+      },
+      "note": "An unparseable source must not relax the rest of the list.",
+      "results": {
+        "inlineScript": "blocked",
+        "inlineStyle": "blocked",
+        "fetch": "blocked",
+        "evalAllowed": "blocked",
+        "image": "blocked",
+        "externalScript": "allowed",
+        "xhr": "blocked",
+        "probeRan": true,
+        "externalStyle": "blocked"
+      },
+      "rows": [
+        {
+          "key": "image",
+          "want": "deny",
+          "got": "blocked",
+          "verdict": "ok"
+        }
+      ],
+      "failOpen": 0,
+      "hazard": 0
+    },
+    {
+      "id": "garbage-directive",
+      "csp": "default-src 'none'; script-src http://127.0.0.1:7202; not-a-directive whatever; img-src 'none'",
+      "expect": {
+        "image": "deny"
+      },
+      "note": "An unknown directive must be ignored without weakening the policy.",
+      "results": {
+        "inlineScript": "blocked",
+        "inlineStyle": "blocked",
+        "fetch": "blocked",
+        "evalAllowed": "blocked",
+        "image": "blocked",
+        "externalScript": "allowed",
+        "xhr": "blocked",
+        "probeRan": true,
+        "externalStyle": "blocked"
+      },
+      "rows": [
+        {
+          "key": "image",
+          "want": "deny",
+          "got": "blocked",
+          "verdict": "ok"
+        }
+      ],
+      "failOpen": 0,
+      "hazard": 0
+    },
+    {
+      "id": "uppercase-directive",
+      "csp": "DEFAULT-SRC 'NONE'",
+      "expect": {
+        "externalScript": "deny"
+      },
+      "note": "Directive names and keywords are ASCII case-insensitive.",
+      "results": {
+        "probeRan": false
+      },
+      "rows": [
+        {
+          "key": "externalScript",
+          "want": "deny",
+          "got": "blocked",
+          "verdict": "ok"
+        }
+      ],
+      "failOpen": 0,
+      "hazard": 0
+    },
+    {
+      "id": "tab-separated",
+      "csp": "default-src\t'none'",
+      "expect": {
+        "externalScript": "deny"
+      },
+      "note": "Whitespace other than a plain space still separates tokens.",
+      "results": {
+        "probeRan": false
+      },
+      "rows": [
+        {
+          "key": "externalScript",
+          "want": "deny",
+          "got": "blocked",
+          "verdict": "ok"
+        }
+      ],
+      "failOpen": 0,
+      "hazard": 0
+    },
+    {
+      "id": "r25-canary-keyword-first",
+      "csp": "default-src 'none'; script-src http://127.0.0.1:7202; img-src 'self' http://127.0.0.1:7202",
+      "expect": {
+        "image": "canary"
+      },
+      "note": "WebKit drops the host-source when a keyword precedes it. Blocked here means the bug is still present and ADR-F039 is still required.",
+      "results": {
+        "inlineScript": "blocked",
+        "inlineStyle": "blocked",
+        "fetch": "blocked",
+        "evalAllowed": "blocked",
+        "image": "allowed",
+        "externalScript": "allowed",
+        "xhr": "blocked",
+        "probeRan": true,
+        "externalStyle": "blocked"
+      },
+      "rows": [
+        {
+          "key": "image",
+          "want": "canary",
+          "got": "allowed",
+          "verdict": "CANARY-TRIPPED"
+        }
+      ],
+      "failOpen": 0,
+      "hazard": 0
+    },
+    {
+      "id": "order-host-only",
+      "csp": "default-src 'none'; script-src 'self' http://127.0.0.1:7202; style-src 'self' http://127.0.0.1:7202; img-src http://127.0.0.1:7202; font-src 'self' http://127.0.0.1:7202; connect-src 'none'",
+      "expect": {
+        "image": "either"
+      },
+      "note": "img-src sources: http://127.0.0.1:7202",
+      "results": {
+        "inlineScript": "blocked",
+        "inlineStyle": "blocked",
+        "fetch": "blocked",
+        "evalAllowed": "blocked",
+        "image": "allowed",
+        "externalScript": "allowed",
+        "xhr": "blocked",
+        "probeRan": true,
+        "externalStyle": "allowed"
+      },
+      "rows": [
+        {
+          "key": "image",
+          "want": "either",
+          "got": "allowed",
+          "verdict": "ok"
+        }
+      ],
+      "failOpen": 0,
+      "hazard": 0
+    },
+    {
+      "id": "order-host-then-self",
+      "csp": "default-src 'none'; script-src 'self' http://127.0.0.1:7202; style-src 'self' http://127.0.0.1:7202; img-src http://127.0.0.1:7202 'self'; font-src 'self' http://127.0.0.1:7202; connect-src 'none'",
+      "expect": {
+        "image": "either"
+      },
+      "note": "img-src sources: http://127.0.0.1:7202 'self'",
+      "results": {
+        "inlineScript": "blocked",
+        "inlineStyle": "blocked",
+        "fetch": "blocked",
+        "evalAllowed": "blocked",
+        "image": "allowed",
+        "externalScript": "allowed",
+        "xhr": "blocked",
+        "probeRan": true,
+        "externalStyle": "allowed"
+      },
+      "rows": [
+        {
+          "key": "image",
+          "want": "either",
+          "got": "allowed",
+          "verdict": "ok"
+        }
+      ],
+      "failOpen": 0,
+      "hazard": 0
+    },
+    {
+      "id": "order-host-then-data",
+      "csp": "default-src 'none'; script-src 'self' http://127.0.0.1:7202; style-src 'self' http://127.0.0.1:7202; img-src http://127.0.0.1:7202 data:; font-src 'self' http://127.0.0.1:7202; connect-src 'none'",
+      "expect": {
+        "image": "either"
+      },
+      "note": "img-src sources: http://127.0.0.1:7202 data:",
+      "results": {
+        "inlineScript": "blocked",
+        "inlineStyle": "blocked",
+        "fetch": "blocked",
+        "evalAllowed": "blocked",
+        "image": "allowed",
+        "externalScript": "allowed",
+        "xhr": "blocked",
+        "probeRan": true,
+        "externalStyle": "allowed"
+      },
+      "rows": [
+        {
+          "key": "image",
+          "want": "either",
+          "got": "allowed",
+          "verdict": "ok"
+        }
+      ],
+      "failOpen": 0,
+      "hazard": 0
+    },
+    {
+      "id": "order-self-only",
+      "csp": "default-src 'none'; script-src 'self' http://127.0.0.1:7202; style-src 'self' http://127.0.0.1:7202; img-src 'self'; font-src 'self' http://127.0.0.1:7202; connect-src 'none'",
+      "expect": {
+        "image": "either"
+      },
+      "note": "img-src sources: 'self'",
+      "results": {
+        "inlineScript": "blocked",
+        "inlineStyle": "blocked",
+        "fetch": "blocked",
+        "evalAllowed": "blocked",
+        "image": "blocked",
+        "externalScript": "allowed",
+        "xhr": "blocked",
+        "probeRan": true,
+        "externalStyle": "allowed"
+      },
+      "rows": [
+        {
+          "key": "image",
+          "want": "either",
+          "got": "blocked",
+          "verdict": "ok"
+        }
+      ],
+      "failOpen": 0,
+      "hazard": 0
+    },
+    {
+      "id": "order-self-then-host",
+      "csp": "default-src 'none'; script-src 'self' http://127.0.0.1:7202; style-src 'self' http://127.0.0.1:7202; img-src 'self' http://127.0.0.1:7202; font-src 'self' http://127.0.0.1:7202; connect-src 'none'",
+      "expect": {
+        "image": "either"
+      },
+      "note": "img-src sources: 'self' http://127.0.0.1:7202",
+      "results": {
+        "inlineScript": "blocked",
+        "inlineStyle": "blocked",
+        "fetch": "blocked",
+        "evalAllowed": "blocked",
+        "image": "allowed",
+        "externalScript": "allowed",
+        "xhr": "blocked",
+        "probeRan": true,
+        "externalStyle": "allowed"
+      },
+      "rows": [
+        {
+          "key": "image",
+          "want": "either",
+          "got": "allowed",
+          "verdict": "ok"
+        }
+      ],
+      "failOpen": 0,
+      "hazard": 0
+    },
+    {
+      "id": "order-data-then-host",
+      "csp": "default-src 'none'; script-src 'self' http://127.0.0.1:7202; style-src 'self' http://127.0.0.1:7202; img-src data: http://127.0.0.1:7202; font-src 'self' http://127.0.0.1:7202; connect-src 'none'",
+      "expect": {
+        "image": "either"
+      },
+      "note": "img-src sources: data: http://127.0.0.1:7202",
+      "results": {
+        "inlineScript": "blocked",
+        "inlineStyle": "blocked",
+        "fetch": "blocked",
+        "evalAllowed": "blocked",
+        "image": "allowed",
+        "externalScript": "allowed",
+        "xhr": "blocked",
+        "probeRan": true,
+        "externalStyle": "allowed"
+      },
+      "rows": [
+        {
+          "key": "image",
+          "want": "either",
+          "got": "allowed",
+          "verdict": "ok"
+        }
+      ],
+      "failOpen": 0,
+      "hazard": 0
+    },
+    {
+      "id": "order-self-data-host",
+      "csp": "default-src 'none'; script-src 'self' http://127.0.0.1:7202; style-src 'self' http://127.0.0.1:7202; img-src 'self' data: http://127.0.0.1:7202; font-src 'self' http://127.0.0.1:7202; connect-src 'none'",
+      "expect": {
+        "image": "either"
+      },
+      "note": "img-src sources: 'self' data: http://127.0.0.1:7202",
+      "results": {
+        "inlineScript": "blocked",
+        "inlineStyle": "blocked",
+        "fetch": "blocked",
+        "evalAllowed": "blocked",
+        "image": "allowed",
+        "externalScript": "allowed",
+        "xhr": "blocked",
+        "probeRan": true,
+        "externalStyle": "allowed"
+      },
+      "rows": [
+        {
+          "key": "image",
+          "want": "either",
+          "got": "allowed",
+          "verdict": "ok"
+        }
+      ],
+      "failOpen": 0,
+      "hazard": 0
+    },
+    {
+      "id": "control-permissive",
+      "csp": "default-src *; script-src http://127.0.0.1:7202 'unsafe-inline'; style-src http://127.0.0.1:7202 'unsafe-inline'; img-src http://127.0.0.1:7202",
+      "expect": {
+        "externalScript": "allow",
+        "image": "allow",
+        "externalStyle": "allow"
+      },
+      "note": "Proves the matrix can observe an allow at all. Without this a probe that blocks everything looks like a perfect pass.",
+      "results": {
+        "inlineScript": "allowed",
+        "inlineStyle": "allowed",
+        "fetch": "blocked",
+        "evalAllowed": "blocked",
+        "image": "allowed",
+        "externalScript": "allowed",
+        "xhr": "blocked",
+        "probeRan": true,
+        "externalStyle": "allowed"
+      },
+      "rows": [
+        {
+          "key": "externalScript",
+          "want": "allow",
+          "got": "allowed",
+          "verdict": "ok"
+        },
+        {
+          "key": "image",
+          "want": "allow",
+          "got": "allowed",
+          "verdict": "ok"
+        },
+        {
+          "key": "externalStyle",
+          "want": "allow",
+          "got": "allowed",
+          "verdict": "ok"
+        }
+      ],
+      "failOpen": 0,
+      "hazard": 0
+    }
+  ],
+  "failOpenTotal": 0,
+  "hazardTotal": 2
+}
