@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<!--
+SPDX-FileCopyrightText: 2026 Kevin Carlson
+SPDX-License-Identifier: Apache-2.0
+
+The content document. Served from the content origin over whichever transport is
+under test. Everything it references is relative, deliberately: ADR-F007's claim
+is that relative hrefs resolve naturally under the scheme handler, and that claim
+is only tested if nothing here is absolute.
+-->
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" data-transport="unknown">
+<head>
+<meta charset="UTF-8"/>
+<title>F1c content probe</title>
+<link rel="stylesheet" type="text/css" href="book.css"/>
+</head>
+<body>
+<h1 id="css-probe">Content origin probe</h1>
+<p><img id="img-probe" src="probe.png" alt="relative image probe" width="32" height="32"/></p>
+<pre id="out">running…</pre>
+<script src="probe.js"></script>
+</body>
+</html>

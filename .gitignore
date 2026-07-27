@@ -28,3 +28,6 @@ Cargo.lock
 # Spike F1 harness: generated corpus and node deps are reproducible from source
 spikes/*/node_modules/
 spikes/f1-multicol/corpus/book/
+
+# Spike F1c Tauri probe build artifacts
+spikes/f1c-custom-scheme/tauri/target/

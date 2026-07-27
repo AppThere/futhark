@@ -1,0 +1,131 @@
+{
+  "transport": "http",
+  "contentOrigin": "http://127.0.0.1:7202",
+  "appOrigin": "http://127.0.0.1:7201",
+  "appHref": "http://127.0.0.1:7201/host.html?transport=http&content=http%3A%2F%2F127.0.0.1%3A7202",
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.7390.37 Safari/537.36",
+  "host": {
+    "contentDocumentReachable": false,
+    "contentWindowLocation": "threw: SecurityError",
+    "sandboxAttr": "allow-scripts",
+    "appHasTauriBridge": false,
+    "appIsSecureContext": true
+  },
+  "content": {
+    "windowOrigin": {
+      "ok": true,
+      "value": "null"
+    },
+    "documentOrigin": {
+      "ok": true,
+      "value": "(undefined)"
+    },
+    "locationOrigin": {
+      "ok": true,
+      "value": "http://127.0.0.1:7202"
+    },
+    "href": {
+      "ok": true,
+      "value": "http://127.0.0.1:7202/content.xhtml"
+    },
+    "protocol": {
+      "ok": true,
+      "value": "http:"
+    },
+    "isSecureContext": {
+      "ok": true,
+      "value": true
+    },
+    "parentLocationHref": {
+      "ok": false,
+      "threw": "SecurityError",
+      "message": "Failed to read a named property 'href' from 'Location': Blocked a frame with origin \"null\" from accessing a cross-origin frame."
+    },
+    "parentDocument": {
+      "ok": false,
+      "threw": "SecurityError",
+      "message": "Failed to read a named property 'document' from 'Window': Blocked a frame with origin \"null\" from accessing a cross-origin frame."
+    },
+    "topLocationHref": {
+      "ok": false,
+      "threw": "SecurityError",
+      "message": "Failed to read a named property 'href' from 'Location': Blocked a frame with origin \"null\" from accessing a cross-origin frame."
+    },
+    "localStorage": {
+      "ok": false,
+      "threw": "SecurityError",
+      "message": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag."
+    },
+    "sessionStorage": {
+      "ok": false,
+      "threw": "SecurityError",
+      "message": "Failed to read the 'sessionStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag."
+    },
+    "indexedDB": {
+      "ok": false,
+      "threw": "SecurityError",
+      "message": "Failed to execute 'open' on 'IDBFactory': access to the Indexed Database API is denied in this context."
+    },
+    "cookie": {
+      "ok": false,
+      "threw": "SecurityError",
+      "message": "Failed to set the 'cookie' property on 'Document': The document is sandboxed and lacks the 'allow-same-origin' flag."
+    },
+    "tauriBridge": {
+      "ok": true,
+      "value": "none"
+    },
+    "webkitMessageHandlers": {
+      "ok": true,
+      "value": "absent"
+    },
+    "fetchAppOrigin": {
+      "ok": false,
+      "threw": "TypeError",
+      "message": "blocked: Failed to fetch"
+    },
+    "xhr": {
+      "ok": false,
+      "threw": "NetworkError",
+      "message": "Failed to execute 'send' on 'XMLHttpRequest': Failed to load 'http://127.0.0.1:7202/__f1c/should-be-blocked'."
+    },
+    "webSocket": {
+      "ok": false,
+      "threw": "error",
+      "message": "connection refused or blocked"
+    },
+    "inlineScriptBlocked": {
+      "ok": true,
+      "value": "blocked"
+    },
+    "topNavigation": {
+      "ok": false,
+      "threw": "SecurityError",
+      "message": "Failed to read a named property 'href' from 'Location': Blocked a frame with origin \"null\" from accessing a cross-origin frame."
+    },
+    "windowOpen": {
+      "ok": true,
+      "value": "blocked (null)"
+    },
+    "formSubmitNavigated": {
+      "ok": true,
+      "value": "no navigation"
+    },
+    "relativeStylesheetApplied": {
+      "ok": true,
+      "value": "rgb(0, 128, 0)"
+    },
+    "relativeImageLoaded": {
+      "ok": true,
+      "value": "loaded 8px"
+    },
+    "userAgent": {
+      "ok": true,
+      "value": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.7390.37 Safari/537.36"
+    }
+  },
+  "messageOrigin": "null",
+  "engine": "chromium",
+  "engineVersion": "Chromium 141.0.7390.37",
+  "platform": "linux-x64"
+}

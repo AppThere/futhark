@@ -101,7 +101,10 @@ futhark/
 ```
 
 `spikes/` is outside the Cargo workspace on purpose. A spike answers one question
-and then becomes evidence; nothing in `crates/` may ever depend on one.
+and then becomes evidence; nothing in `crates/` may ever depend on one. A spike
+may contain shell code where the question *is* about the shell (F1c probes
+`WKURLSchemeHandler` origin semantics and needs a Tauri host to do it) — that is
+not a licence to populate `shell/`, which stays empty until D1 resolves.
 
 Context names in the spec map one-to-one onto crate names. There is no translation step.
 

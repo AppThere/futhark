@@ -10,10 +10,10 @@ SPDX-License-Identifier: Apache-2.0
 | Document | `SPIKE_F1B_WKWEBVIEW.md` |
 | Spike ID | F1b |
 | Status | **Not run — protocol only. Harness ready.** |
-| Version | 0.1.0 |
+| Version | 0.2.0 |
 | Date | 2026-07-27 |
-| Depends on | `SPIKE_F1_MULTICOL_PAGINATION.md`, `FUTHARK_PROGRAM_SPEC.md` 0.5.0 §10, R21 |
-| Gates | Final confirmation of D1 |
+| Depends on | `SPIKE_F1_MULTICOL_PAGINATION.md`, `FUTHARK_PROGRAM_SPEC.md` 0.6.0 §10, R21, R23 |
+| Gates | D1, jointly with Spike F1c — F1b alone is not sufficient |
 | Harness | `spikes/f1-multicol/` — no changes needed |
 
 ---
@@ -59,9 +59,18 @@ Plus the two invariants F1 checked alongside them:
 | 4 | Content reachable by paging | no text stranded past the last page, **except** the `vertical-rl` chapter, which is expected to fail — ADR-F034 already routes it to scroll mode |
 | 5 | Sandbox boundary | app origin cannot reach `contentDocument`; content is not same-origin with parent; storage denied |
 
-Criterion 5 is the one most likely to behave differently, because iframe sandbox
-enforcement is where WebKit's platform ports have historically diverged most from
-each other. If it fails, ADR-F005 needs a look before ADR-F001 does.
+**Criterion 5 is provisional in this spike no matter what it reports** — a pass
+included. The harness serves the content origin over `http`; Tauri serves it
+through `WKURLSchemeHandler`, and the custom scheme *is* the origin mechanism
+ADR-F005 and ADR-F007 rest on. Opaque-origin behaviour, CSP application, and
+sandbox enforcement all hang off how the engine treats that origin, so a green
+result here is evidence about `http` origins in Safari and not about
+`futhark-content://` origins in Tauri. That is R23; Spike F1c settles it.
+
+Record criterion 5 anyway. A *failure* here is decisive in one direction — if
+sandbox enforcement is already weaker on `http` in Safari, it will not be
+stronger under a custom scheme, and ADR-F005 needs attention before ADR-F001
+does. Only a pass is inconclusive.
 
 ## 4. Procedure
 
@@ -94,20 +103,23 @@ safaridriver numbers at all.
 Update this document with a §6 Results and a §7 Verdict in the shape F1 used, and
 either:
 
-- **Pass** — R21 retired, D1's factual blocker cleared. ADR-F001 becomes a
-  decision about product priorities rather than one waiting on evidence.
+- **Pass on criteria 1–4** — the engine half of R21 is retired. D1 still waits
+  on F1c for the origin half; criterion 5 stays provisional (R23).
 - **Fail** — record which criterion, on which documents, with the same
   reachability instrumentation F1 used. A criterion-1 or criterion-2 failure on
   WKWebView would re-open §6.5's second sensitivity condition, which F1 closed.
-  A criterion-5 failure is a security finding first and a shell finding second.
+  A criterion-5 failure is a security finding first and a shell finding second,
+  and does not need to wait for F1c to be acted on.
 
 Either way the spec's F1b row in §10, R21, and D1 need updating to match.
 
 ## 6. Known limits of this spike before it runs
 
-- **safaridriver drives Safari, not a Tauri-embedded WKWebView.** Same system
-  WebKit, different embedding and process configuration. A disagreement with
-  WebKitGTK should be re-checked inside a real Tauri shell before it is believed.
+- **The origin mechanism is wrong, and that is structural.** safaridriver serves
+  over `http`; Tauri serves the content origin through `WKURLSchemeHandler`. This
+  is not the same experiment for anything origin-shaped, which is why criterion 5
+  is provisional here and why F1c exists (R23). Criteria 1–4 are unaffected —
+  layout does not care how the bytes arrived.
 - **iOS is still not covered.** WKWebView on iOS is the same engine family but a
   different device class, with different default text sizing and no pointer
   input. If D2 puts iOS in v1, gesture and text-inflation behaviour there is a

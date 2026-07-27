@@ -396,10 +396,21 @@ together. The Blink control on the same machine is deliberate: if
 `chromium-macos` matches `chromium` from Linux, then any WebKit-side difference
 is the engine rather than the hardware.
 
-**What safaridriver measures.** Safari and WKWebView on the same macOS build
-share the system WebKit — the same WebCore fragmentation code, the same CoreText
-rasterisation, the same fonts. That is the entire surface F1 exercises. What it
-does not share is process configuration and embedding: a Tauri WKWebView is
-created by the app with its own `WKWebViewConfiguration`. Nothing measured here
-is known to depend on that, but a safaridriver result that disagrees with
-WebKitGTK should be re-checked in a real Tauri shell before it is believed.
+**What safaridriver measures, and what it structurally cannot.** Safari and
+WKWebView on the same macOS build share the system WebKit — the same WebCore
+fragmentation code, the same CoreText rasterisation, the same fonts. That covers
+criteria 1–4 (pagination, position, selection, reflow), which are pure layout.
+
+It does not cover criterion 5, and the reason is not configuration drift. **The
+harness serves the content origin over `http`; Tauri serves it through
+`WKURLSchemeHandler`.** The custom scheme is not a delivery detail sitting next
+to the security model — it *is* the origin mechanism that ADR-F005 and ADR-F007
+rest on. Opaque-origin behaviour, CSP application, and iframe sandbox
+enforcement all hang off how the engine treats that origin, and a
+custom-scheme origin is not an `http` origin.
+
+So the one criterion §3.1 flags as likeliest to differ is exactly the one
+safaridriver cannot speak to on the configuration Futhark ships. That is R23,
+and it is why **F1b's criterion 5 is provisional whatever it reports — including
+if it agrees with WebKitGTK.** Spike F1c closes it in a real Tauri shell.
+D1 needs both.

@@ -1,0 +1,131 @@
+{
+  "messageOrigin": "null",
+  "contentOrigin": "http://127.0.0.1:7202",
+  "appOrigin": "http://127.0.0.1:7201",
+  "transport": "http",
+  "appHref": "http://127.0.0.1:7201/host.html?transport=http&content=http%3A%2F%2F127.0.0.1%3A7202",
+  "host": {
+    "sandboxAttr": "allow-scripts",
+    "appIsSecureContext": true,
+    "contentDocumentReachable": false,
+    "appHasTauriBridge": false,
+    "contentWindowLocation": "threw: SecurityError"
+  },
+  "userAgent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15",
+  "content": {
+    "windowOrigin": {
+      "ok": true,
+      "value": "null"
+    },
+    "parentDocument": {
+      "threw": "SecurityError",
+      "ok": false,
+      "message": "Sandbox access violation: Blocked a frame at \"http://127.0.0.1:7202\" from accessing a cross-origin frame.  The frame requesting access is sandboxed and lacks the \"allow-same-origin\" flag."
+    },
+    "tauriBridge": {
+      "ok": true,
+      "value": "none"
+    },
+    "href": {
+      "ok": true,
+      "value": "http://127.0.0.1:7202/content.xhtml"
+    },
+    "windowOpen": {
+      "ok": true,
+      "value": "blocked (null)"
+    },
+    "localStorage": {
+      "threw": "SecurityError",
+      "ok": false,
+      "message": "The operation is insecure."
+    },
+    "inlineScriptBlocked": {
+      "ok": true,
+      "value": "blocked"
+    },
+    "webkitMessageHandlers": {
+      "ok": true,
+      "value": "absent"
+    },
+    "isSecureContext": {
+      "ok": true,
+      "value": true
+    },
+    "formSubmitNavigated": {
+      "ok": true,
+      "value": "no navigation"
+    },
+    "fetchAppOrigin": {
+      "threw": "TypeError",
+      "ok": false,
+      "message": "blocked: Load failed"
+    },
+    "cookie": {
+      "threw": "SecurityError",
+      "ok": false,
+      "message": "The operation is insecure."
+    },
+    "webSocket": {
+      "threw": "SecurityError",
+      "ok": false,
+      "message": "The operation is insecure."
+    },
+    "protocol": {
+      "ok": true,
+      "value": "http:"
+    },
+    "parentLocationHref": {
+      "threw": "SecurityError",
+      "ok": false,
+      "message": "Sandbox access violation: Blocked a frame at \"http://127.0.0.1:7202\" from accessing a cross-origin frame.  The frame requesting access is sandboxed and lacks the \"allow-same-origin\" flag."
+    },
+    "documentOrigin": {
+      "ok": true,
+      "value": "(undefined)"
+    },
+    "topLocationHref": {
+      "threw": "SecurityError",
+      "ok": false,
+      "message": "Sandbox access violation: Blocked a frame at \"http://127.0.0.1:7202\" from accessing a cross-origin frame.  The frame requesting access is sandboxed and lacks the \"allow-same-origin\" flag."
+    },
+    "locationOrigin": {
+      "ok": true,
+      "value": "http://127.0.0.1:7202"
+    },
+    "sessionStorage": {
+      "threw": "SecurityError",
+      "ok": false,
+      "message": "The operation is insecure."
+    },
+    "indexedDB": {
+      "threw": "SecurityError",
+      "ok": false,
+      "message": "IDBFactory.open() called in an invalid security context"
+    },
+    "relativeStylesheetApplied": {
+      "ok": true,
+      "value": "rgb(0, 128, 0)"
+    },
+    "relativeImageLoaded": {
+      "ok": true,
+      "value": "NOT loaded"
+    },
+    "xhr": {
+      "threw": "NetworkError",
+      "ok": false,
+      "message": " A network error occurred."
+    },
+    "topNavigation": {
+      "threw": "SecurityError",
+      "ok": false,
+      "message": "Sandbox access violation: Blocked a frame at \"http://127.0.0.1:7202\" from accessing a cross-origin frame.  The frame requesting access is sandboxed and lacks the \"allow-same-origin\" flag."
+    },
+    "userAgent": {
+      "ok": true,
+      "value": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15"
+    }
+  },
+  "engine": "webkitgtk",
+  "engineVersion": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15",
+  "platform": "linux-x64"
+}

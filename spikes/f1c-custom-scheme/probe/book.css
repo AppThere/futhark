@@ -1,0 +1,8 @@
+/* SPDX-FileCopyrightText: 2026 Kevin Carlson */
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Loaded by a RELATIVE href from the content document. If #css-probe is not
+   green, the relative URL did not resolve under this transport — which is the
+   fidelity half of ADR-F007, not the security half. */
+#css-probe { color: rgb(0, 128, 0); }
+body { font: 13px/1.5 ui-monospace, monospace; margin: 12px; }
+pre { white-space: pre-wrap; }

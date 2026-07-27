@@ -1,0 +1,34 @@
+# SPDX-FileCopyrightText: 2026 Kevin Carlson
+# SPDX-License-Identifier: Apache-2.0
+#
+# Spike F1c only. NOT the presentation shell, NOT a workspace member, and
+# nothing in crates/ may ever depend on it. ADR-F001 is still provisional; this
+# exists to answer one question about WKURLSchemeHandler origin semantics and
+# is deleted or archived once F1c returns.
+
+# Empty table: this crate is deliberately NOT a member of the futhark workspace.
+# spikes/ is outside it by charter, and inheriting the workspace lints would be
+# the first thread of a dependency nothing is allowed to have.
+[workspace]
+
+[package]
+name = "futhark-f1c"
+version = "0.0.0"
+description = "Spike F1c: custom-scheme origin semantics probe."
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+# Deliberately not `workspace = true` on anything: this crate is outside the
+# workspace and must not inherit its lints or its dependency pins.
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+strip = true
