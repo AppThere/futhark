@@ -1,0 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Kevin Carlson
+# SPDX-License-Identifier: Apache-2.0
+#
+# unwrap/expect are denied in library code by workspace lints; tests may use them.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests  = true

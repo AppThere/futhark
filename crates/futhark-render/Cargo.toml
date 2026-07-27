@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 Kevin Carlson
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name         = "futhark-render"
+version      = "0.0.0"
+description  = "Rendering context: raster pipeline, tile cache, font resolution."
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+authors.workspace      = true
+repository.workspace   = true
+
+[dependencies]
+thiserror.workspace = true
+
+[lints]
+workspace = true

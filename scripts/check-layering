@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Kevin Carlson
+# SPDX-License-Identifier: Apache-2.0
+"""Enforce ADR-F002: domain crates must not depend on the presentation shell.
+
+Checks direct dependencies and workspace-internal transitive paths. External
+transitive edges are not visible without `cargo metadata`; the denylist is the
+backstop for those, and it is the realistic failure mode anyway (someone adds
+`tauri` to a domain crate for convenience).
+"""
+from __future__ import annotations
+import sys, tomllib
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+CRATES = ROOT / "crates"
+
+
+def load(p: Path) -> dict:
+    with p.open("rb") as fh:
+        return tomllib.load(fh)
+
+
+def main() -> int:
+    cfg = load(ROOT / "layering.toml")
+    deny = set(cfg.get("shell_crates", []))
+    prefixes = tuple(cfg.get("shell_prefixes", []))
+
+    exempt: dict[str, set[str]] = {}
+    for e in cfg.get("exemptions", []):
+        if not e.get("reason") or not e.get("adr"):
+            print(f"exemption for {e.get('crate')!r} lacks reason or adr", file=sys.stderr)
+            return 1
+        exempt.setdefault(e["crate"], set()).add(e["allows"])
+
+    failures: list[str] = []
+    graph: dict[str, set[str]] = {}
+
+    for manifest in sorted(CRATES.glob("*/Cargo.toml")):
+        data = load(manifest)
+        name = data["package"]["name"]
+        allowed = exempt.get(name, set())
+        deps: set[str] = set()
+
+        for section in ("dependencies", "build-dependencies"):
+            for dep, spec in data.get(section, {}).items():
+                deps.add(dep)
+                if dep in allowed:
+                    continue
+                if dep in deny or dep.startswith(prefixes):
+                    failures.append(f"{name}: [{section}] depends on shell crate {dep!r}")
+                if isinstance(spec, dict) and "path" in spec:
+                    if "shell" in Path(spec["path"]).parts:
+                        failures.append(f"{name}: [{section}] path-depends on shell/ ({dep})")
+
+        graph[name] = {d for d in deps if d.startswith("futhark-")}
+
+    # Workspace-internal transitive reachability into anything already flagged.
+    tainted = {f.split(":")[0] for f in failures}
+    changed = True
+    while changed:
+        changed = False
+        for crate, deps in graph.items():
+            if crate not in tainted and deps & tainted:
+                tainted.add(crate)
+                failures.append(f"{crate}: transitively reaches the shell via {sorted(deps & tainted)}")
+                changed = True
+
+    if failures:
+        print("ADR-F002 violation — domain crates must stay shell-agnostic:\n", file=sys.stderr)
+        for f in sorted(set(failures)):
+            print(f"  {f}", file=sys.stderr)
+        print("\nIf this dependency is genuinely necessary, it needs an ADR and an "
+              "entry in layering.toml — not a quiet addition.", file=sys.stderr)
+        return 1
+
+    print(f"layering: ok ({len(graph)} domain crates, shell-agnostic)")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

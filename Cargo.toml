@@ -1,0 +1,67 @@
+# SPDX-FileCopyrightText: 2026 Kevin Carlson
+# SPDX-License-Identifier: Apache-2.0
+
+[workspace]
+resolver = "3"
+members = [
+    "crates/futhark-core",
+    "crates/futhark-catalog",
+    "crates/futhark-ingest",
+    "crates/futhark-doc",
+    "crates/futhark-epub",
+    "crates/futhark-mobi",
+    "crates/futhark-pdf",
+    "crates/futhark-nav",
+    "crates/futhark-render",
+    "crates/futhark-annot",
+    "crates/futhark-store",
+    "crates/futhark-stats",
+    "crates/futhark-sandbox",
+    "crates/futhark-editor",
+    "crates/futhark-sync",
+    "crates/futhark-meta",
+    "crates/futhark-convert",
+]
+
+[workspace.package]
+edition      = "2024"
+rust-version = "1.92"          # floor set by hayro; do not lower without checking
+license      = "Apache-2.0"
+authors      = ["Kevin Carlson"]
+repository   = "https://github.com/kevincarlson/futhark"
+
+# Lints are defined once here and inherited by every crate via `[lints] workspace = true`.
+# `unsafe_code = "forbid"` cannot be downgraded by an `allow`; a crate needing an exception
+# must opt out of workspace lints explicitly and document the reason in an ADR.
+[workspace.lints.rust]
+unsafe_code            = "forbid"
+missing_docs           = "warn"
+missing_debug_implementations = "warn"
+unreachable_pub        = "warn"
+
+[workspace.lints.clippy]
+unwrap_used            = "deny"
+expect_used            = "deny"
+panic                  = "deny"
+todo                   = "warn"
+indexing_slicing       = "warn"   # panics on malformed input; use .get()
+integer_division       = "warn"
+cast_possible_truncation = "warn"
+
+[workspace.dependencies]
+# --- Settled. Versions verified. ---
+thiserror = "2"
+serde     = { version = "1", features = ["derive"] }
+
+# --- Confirm exact version at first use. Do not add a dependency to a crate
+# --- before the subsystem spec that calls for it has been accepted.
+# hayro                = "0.4"    # ADR-F009, PDF rasterization
+# palmdoc-compression  = "*"      # ADR-F010, KF8 LZ77 layer
+# quick-xml            = "*"      # EPUB parsing, if ADR-F011 reverses
+# zip                  = "*"      # EPUB container
+# sqlx                 = "*"      # ADR-F016, catalog
+# loro                 = "*"      # ADR-F018, sync
+# i18n-embed-fl        = "*"      # fl!() user-visible strings
+
+# --- PROVISIONAL. Gated on Spike F2 (ADR-F011). Do not add without resolving D1/F2.
+# rbook                = "0.7"

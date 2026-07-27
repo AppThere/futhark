@@ -1,0 +1,610 @@
+<!--
+SPDX-FileCopyrightText: 2026 Kevin Carlson
+SPDX-License-Identifier: Apache-2.0
+-->
+
+# AppThere Futhark — Program Specification (Spec 00)
+
+| Field | Value |
+|---|---|
+| Document | `FUTHARK_PROGRAM_SPEC.md` |
+| Spec ID | 00 |
+| Status | **Draft — pending open decisions in §12** |
+| Version | 0.4.0 |
+| Date | 2026-07-27 |
+| Supersedes | — |
+| Depends on | `LOKI_*` specs (document model precedent), `APPTHERE_CLOUD_*` (sync substrate) |
+| Naming | Components are named descriptively. Context names match crate names. |
+
+---
+
+## 1. Purpose
+
+Futhark is the AppThere suite's **ebook library manager, reader, and editor**. It occupies the
+position Calibre + a reader app + Sigil occupy today, but as one coherent native application
+running the same core on desktop and mobile.
+
+The product has three primary surfaces:
+
+1. **Library** — the shelf. Catalog of every book and document the user owns, with metadata,
+   covers, collections, search, and filtering.
+2. **Reader** — the reading surface. Paginated or scrolling reflow for EPUB/MOBI, fixed-page
+   rendering for PDF, with annotations, bookmarks, progress, and typography controls.
+3. **Editor** — the workbench. Structural and source-level editing of EPUB 2/3 packages, with a
+   live preview and validation.
+
+### 1.1 In scope
+
+- Reading: EPUB 2, EPUB 3, MOBI/PRC, AZW/AZW3 (KF8), PDF.
+- Editing: EPUB 2 and EPUB 3 only.
+- Authoring/export: EPUB 2, EPUB 3, and KF8/AZW3 — on all five platforms, at parity.
+- Library management across desktop (Windows, macOS, Linux) and mobile (Android, iOS).
+- Local-first storage with optional AppThere Cloud sync of annotations and reading position.
+
+### 1.2 Non-goals (v1)
+
+| Non-goal | Rationale |
+|---|---|
+| PDF editing | Explicitly excluded by charter. PDF is read-only. |
+| DRM circumvention of any kind | See ADR-F021. Non-negotiable. |
+| KFX, in any direction | Removed from the program entirely. See §5.3. |
+| Writing MOBI/KF7 in any form | Dropped (D9). KF8 is the only output. Reading dual KF7+KF8 files is unaffected. |
+| Comic formats (CBZ/CBR) | Deferred to Phase 7. Cheap once the fixed-layout pipeline exists. |
+| Audiobooks / M4B | Out of program. Belongs with Bragi if ever. |
+| Store integration / purchasing | No commerce surface in v1. |
+| OPDS *serving* | Futhark consumes OPDS catalogs; it does not publish one in v1. |
+| Full-text search across the whole library | Deferred to Phase 5 (see R11). Per-book search is v1. |
+
+---
+
+## 2. Core user journeys
+
+| ID | Journey | Surface |
+|---|---|---|
+| J1 | Point Futhark at a folder of 4,000 mixed-format files; get a browsable, deduplicated library with covers in under two minutes. | Library |
+| J2 | Open a 900-page EPUB 3 and reach the last-read position in under 400 ms. | Reader |
+| J3 | Highlight a passage on the phone; see the highlight on the laptop within seconds. | Reader + Sync |
+| J4 | Adjust font, size, margins, line height, and theme; pagination reflows without losing position. | Reader |
+| J5 | Open a malformed EPUB from an untrusted source; it renders as well as possible and cannot touch the filesystem. | Reader + Security |
+| J6 | Fix a broken `<nav>` document and a stylesheet in an EPUB, validate, and save without corrupting the package. | Editor |
+| J7 | Read a scanned 300 MB PDF with smooth pinch-zoom on a mid-range Android phone. | Reader |
+| J8 | Import a DRM-free MOBI purchased years ago and read it with the same typography controls as EPUB. | Ingest + Reader |
+| J9 | Export an EPUB to AZW3 on the desktop, copy it to a Kindle over USB, and have it appear under Books with a working ToC and cover. | Conversion |
+| J10 | Export the same book to AZW3 on a phone and hand it to Files, Drive, or a USB-C drive via the share sheet. | Conversion |
+
+---
+
+## 3. Bounded contexts
+
+Fifteen contexts. Each maps one-to-one onto a crate in §4.1, and the names are the same in both
+places so there is never a translation step between the spec and the tree.
+
+| # | Context | Crate | Responsibility |
+|---|---|---|---|
+| 1 | **Catalog** | `futhark-catalog` | Holdings, collections, series, search, dedup, cover cache. |
+| 2 | **Ingest** | `futhark-ingest` | Watched folders, sniffing, format detection, integrity checks, quarantine. |
+| 3 | **Codecs** | `futhark-{epub,mobi,pdf}` | Per-format readers and writers. The surface that touches hostile bytes. |
+| 4 | **Document Model** | `futhark-doc` | The normalized in-memory representation all surfaces consume. |
+| 5 | **Navigation** | `futhark-nav` | Spine traversal, CFI/locators, page mapping, position stability. |
+| 6 | **Rendering** | `futhark-render` | Content presentation, font resolution, image decode, PDF raster. |
+| 7 | **Editor** | `futhark-editor` | Package editing, source editing, live preview, validation, undo. |
+| 8 | **Annotations** | `futhark-annot` | Highlights, notes, bookmarks, anchoring and re-anchoring. |
+| 9 | **Storage** | `futhark-store` | SQLite catalog, blob store, file layout, migrations. |
+| 10 | **Progress** | `futhark-stats` | Reading position, sessions, streaks, per-book and library-wide statistics. |
+| 11 | **Sandbox** | `futhark-sandbox` | Untrusted-content isolation, CSP, resource policy, script neutralization. |
+| 12 | **Presentation** | shell + `futhark-core` | Themes, typography settings, TTS, screen-reader semantics, reduced motion. |
+| 13 | **Sync** | `futhark-sync` | CRDT replication of annotations and reading position via AppThere Cloud. |
+| 14 | **Metadata** | `futhark-meta` | OPDS clients, Open Library / Google Books lookup, cover fetch, ISBN matching. |
+| 15 | **Conversion** | `futhark-convert` | Cross-format transformation and export. Owns EPUB to KF8 compilation, CSS downconversion, and loss reporting. |
+
+Conversion is a full context rather than a writer inside Codecs because EPUB to KF8 is a
+compilation step, not a serialization step: it flattens a multi-document spine into a single
+blob with a skeleton/fragment index, and downconverts CSS to a narrower subset. That is a
+transformation with its own fidelity model and its own failure modes.
+
+### 3.1 Dependency direction
+
+```
+Ingest ──▶ Codecs ──▶ Document Model ──▶ Navigation ──▶ Rendering
+              │              │                │             ▲
+              │              │                ▼             │
+              │              │          Annotations ────────┘
+              ▼              ▼
+           Editor        Storage ◀── {Catalog, Annotations, Progress, Sync}
+                            ▲
+                         Catalog ◀── Metadata
+
+Sandbox      wraps Rendering and the Editor preview          (cross-cutting)
+Presentation feeds Rendering and Navigation                  (cross-cutting)
+Sync         replicates {Annotations, Progress} only — never document bytes
+```
+
+Document Model is the waist of the hourglass. Nothing above it knows what format a book was.
+
+---
+
+## 4. Architecture
+
+### 4.1 Crate layout
+
+```
+futhark/
+├─ crates/
+│  ├─ futhark-catalog/        # Catalog: library model, search, collections
+│  ├─ futhark-ingest/         # Ingest: detection, sniffing, watched folders
+│  ├─ futhark-doc/            # Document Model: normalized IR, spine, resources
+│  ├─ futhark-epub/           # Codecs: EPUB 2/3 read + write
+│  ├─ futhark-mobi/           # Codecs: PalmDB/MOBI/KF8 read + write (bespoke)
+│  ├─ futhark-pdf/            # Codecs + Rendering: hayro integration
+│  ├─ futhark-nav/            # Navigation: locators, CFI, pagination map
+│  ├─ futhark-render/         # Rendering: raster pipeline, tile cache, font resolution
+│  ├─ futhark-annot/          # Annotations: annotation model + anchoring
+│  ├─ futhark-store/          # Storage: SQLite, migrations, blob store
+│  ├─ futhark-stats/          # Progress: sessions, progress
+│  ├─ futhark-sandbox/        # Sandbox: sanitization, CSP policy, resource gate
+│  ├─ futhark-editor/         # Editor: package mutation, validation, undo
+│  ├─ futhark-sync/           # Sync: Loro CRDT + AppThere Cloud client
+│  ├─ futhark-meta/           # Metadata: OPDS, metadata providers
+│  ├─ futhark-convert/        # Conversion: EPUB→KF8 compiler, CSS downconvert, loss report
+│  └─ futhark-core/           # Shared types, errors, config, i18n
+├─ shell/                     # Presentation shell (see §6)
+├─ conformance/               # appthere-conformance suite for Futhark
+└─ patches/
+```
+
+Every crate from `futhark-catalog` through `futhark-meta` is **UI-framework-agnostic**. They
+compile with zero dependency on the shell. This is enforced in CI (ADR-F002) and is what makes
+§6's decision reversible.
+
+### 4.2 Shared AppThere dependencies
+
+| Crate | Use |
+|---|---|
+| `appthere-color` | ICC handling for PDF and image-heavy fixed-layout books. |
+| `appthere-conformance` | Golden-image regression harness, promoted from `loki-acid`. |
+| `appthere-canvas` | Reused only if the Dioxus Native path is chosen (§6). |
+| `appthere-file-access` | Android (and possibly iOS) file I/O. Promoted from Loki's `loki-file-access`; Futhark is its second consumer. See D11. |
+| Loki document model | **Not** reused. EPUB's model is XHTML+CSS, not Loki's paragraph IR. See ADR-F003. |
+
+---
+
+## 5. Format support matrix
+
+| Format | Read | Edit | Library metadata | Crate strategy |
+|---|---|---|---|---|
+| EPUB 3.x | Full | Full | Full | `rbook` evaluated; likely bespoke on `quick-xml` + `zip` |
+| EPUB 2.0.1 | Full | Full | Full | Same, with NCX/OPF 2 paths |
+| MOBI / PRC (KF7) | Full | No | Full | Bespoke `futhark-mobi`. Write only via dual-format opt-in. |
+| AZW3 / KF8 | Full | Via export | Full | Bespoke `futhark-mobi` (container) + `futhark-convert` (compile) |
+| PDF | Full render, no edit | No | Embedded XMP/Info | `hayro` |
+
+"Edit" means in-place structural editing. KF8 is not edited in place — it is *produced*, by
+compiling from EPUB. A user who wants to change an AZW3 edits the EPUB and re-exports. This is
+the same model Calibre and Sigil use, and it avoids maintaining a mutation path over a compiled
+container format.
+
+### 5.1 EPUB
+
+`rbook` 0.7.x is the strongest crate in the ecosystem — fast, format-agnostic traits, and it
+already claims read/build/edit for EPUB 2 and 3. It is the default starting point for
+`futhark-epub`. The risk is that an *editor* needs lossless round-tripping: preserving comments,
+attribute order, whitespace, and unknown elements so that saving a file the user did not touch
+produces byte-identical output. Few parsers are built for that. Spike F2 (§10) decides whether
+`rbook` is adopted, wrapped, or replaced by a bespoke reader over `quick-xml`.
+
+### 5.2 MOBI / KF8 — reading
+
+No maintained Rust crate covers KF8 properly. The `mobi` crate handles PalmDOC headers and
+metadata but stalled around 2022 and does not do KF8. `libmobi` (C) is the reference
+implementation but is a C dependency, which conflicts with the `#![forbid(unsafe_code)]` standard.
+
+**Decision:** write `futhark-mobi` in safe Rust, using `palmdoc-compression` for the LZ77 layer and
+the MobileRead wiki + KindleUnpack as the format reference. KF8 is structurally a compiled EPUB —
+a skeleton/fragment index over an XHTML blob — so once unpacked it feeds the same Document Model IR
+as EPUB, and display comes free: the content is XHTML and renders through the identical pipeline.
+No second renderer, no second typography stack.
+
+Read scope covers PalmDB containers, Record 0 (PalmDOC header, MOBI header, EXTH block, full name),
+PalmDOC-compressed and HUFF/CDIC-compressed text records, FDST, the skeleton and fragment indexes,
+NCX indexes, image records, and CONT/CRES high-DPI resources. Dual KF7+KF8 files are detected via
+the BOUNDARY record and the KF8 half is preferred. Note the asymmetry: Futhark **reads** dual-format
+files because they exist in the wild, but never **writes** one.
+
+### 5.3 KF8 / AZW3 — writing
+
+This is the Kindle interoperability story, and it replaces KFX entirely.
+
+**Why this is tractable where KFX is not.** KF8 is documented on the MobileRead wiki, was
+reverse-engineered over a decade ago, and — critically — is a *static target*: Amazon stopped
+evolving it when KFX arrived. There is no symbol-table churn to chase. `kindling` is an existence
+proof that a pure-Rust KF8 writer works, emitting KF8-only AZW3 by default and dual KF7+KF8 behind
+a legacy flag. Writing a DRM-free KF8 file circumvents nothing, so it carries none of the §1201
+exposure that reading store-purchased Kindle files does.
+
+**Why it is worth building at all**, given that Send to Kindle now accepts EPUB and converts
+server-side: sideloaded AZW3 over USB files under **Books** rather than **Docs**, works with no
+account and no network, and keeps the file under the user's control rather than round-tripping it
+through Amazon's servers. That is a real difference for a local-first library manager, and it is
+the only part of the Kindle path Amazon's own service does not already cover.
+
+**Export runs on all five platforms** (ADR-F031). The compiler is pure Rust with no platform
+surface, so parity costs nothing in the pipeline itself and buys a single implementation, a single
+conformance suite, and no `cfg` divergence. On mobile the user takes delivery through the share
+sheet — into Files, Drive, Dropbox, or a USB-C drive — rather than a save dialog. Futhark's job
+ends at producing a correct file; where it goes next is the user's business, and refusing to
+produce one on a phone would be an arbitrary restriction rather than a technical one.
+
+**The pipeline** (Conversion context, `futhark-convert`):
+
+1. Normalize the source to the Document Model IR.
+2. Flatten the spine into a single XHTML blob, recording fragment boundaries.
+3. Build the skeleton and fragment indexes over that blob.
+4. Downconvert CSS to the KF8 subset, emitting a structured loss report (ADR-F028).
+5. Emit images as records; patch JFIF headers on the cover for Kindle compatibility.
+6. Build the NCX index from the EPUB nav document or NCX.
+7. Assemble Record 0: PalmDOC header, MOBI header, EXTH metadata, full name.
+8. Compress text into PalmDOC records — each non-final record must decompress to exactly 4096
+   bytes to match the declared `text_record_size`. This constraint is easy to violate and produces
+   files that fail silently on device; it is a conformance test, not a code comment.
+9. Emit KF8-only. No KF7 half, no BOUNDARY record, ever (ADR-F027).
+
+**What is deliberately not done:** no DRM is written, ever (ADR-F021). No ASIN is fabricated to
+unlock X-Ray or Goodreads integration — the Calibre KFX Output workflow does this, and writing
+false identifiers into a user's file to trick a vendor's device is not something Futhark will do
+on the user's behalf (ADR-F029).
+
+**What users lose versus KFX:** Enhanced Typesetting, Page Flip, and the KFX-era layout features
+are unavailable in KF8 and always will be. Product copy should say so plainly rather than let
+users infer parity.
+
+### 5.4 PDF
+
+`hayro` (Laurenz Stampfl) is the clear choice: the most feature-complete pure-Rust PDF rasterizer,
+Apache-2.0, `#![forbid(unsafe_code)]`, 1000+ file regression suite scraped from the pdf.js and
+PDFBOX suites, and a `hayro-interpret` `Device` trait that lets Futhark emit into its own backend
+rather than only bitmaps. It also lines up with the `krilla` work already in the Loki server spec —
+same author, same lineage.
+
+Known gaps to plan around: no password-protected/encrypted PDF loading, no blend modes or knockout
+groups, non-embedded CID fonts unsupported, and performance has explicitly not been optimized yet.
+Encrypted-PDF support is the one that will generate user reports on day one (see R7).
+
+---
+
+## 6. Presentation shell evaluation: Tauri 2 vs. Dioxus Native
+
+This is the decision the rest of the program hangs on. It is evaluated on its own merits for
+Futhark, not inherited from Loki.
+
+### 6.1 Why Futhark's calculus differs from Loki's
+
+Loki chose Dioxus Native / Blitz / Vello / Parley for a defensible reason: **OOXML and ODF have no
+native runtime.** No platform ships a `.docx` layout engine. Building one on Vello was not a
+preference, it was the only path to fidelity Kevin controls.
+
+Futhark's primary format inverts that. **EPUB *is* XHTML plus CSS.** Every platform ships a mature,
+heavily-tested, standards-compliant engine for exactly this content, with twenty-five years of
+compatibility work baked in. Choosing to reimplement it is a fundamentally different bet than
+choosing to implement OOXML, because in the EPUB case a correct implementation already exists on
+every target device.
+
+That single asymmetry drives most of what follows.
+
+### 6.2 Framework status (verified July 2026)
+
+**Tauri 2** — stable since October 2024; current line 2.10.x (2.10.1, March 2026). Mobile ships from
+the same Rust core: WKWebView on iOS, Android System WebView on Android, minimum iOS 9 / Android 8
+(API 26). The team has been explicit that 2.0 was *not* the "mobile as a first-class citizen"
+release — it is a solid foundation, with some desktop plugins still unported. Capability-based
+permission model replaced v1's allowlist. Typical bundles 3–8 MB, resident memory roughly half of
+Electron.
+
+**Dioxus Native / Blitz** — Kevin's existing Loki stack: Stylo for CSS, Taffy for layout, Vello +
+wgpu for paint, Parley for text. Android viable per the Loki Tier 1 analysis; iOS blocked on
+Blitz-on-Metal validation. Spike G1 (multi-touch gesture support on the Blitz Android timeline)
+remains open and unresolved.
+
+### 6.3 Criterion-by-criterion
+
+**EPUB 3 CSS and layout fidelity.** The single largest differentiator. Real-world EPUBs lean on
+CSS multi-column (the standard mechanism for paginated reflow), floats, tables, `writing-mode:
+vertical-rl` and ruby annotations for CJK, MathML for STEM titles, SVG, and embedded fonts. Blitz's
+Stylo integration gives real cascade and parsing, but layout coverage across multicol, floats,
+vertical writing modes, and ruby is incomplete, and none of it is on Kevin's roadmap to fix.
+Webviews cover all of it today. *Tauri: 5, Dioxus Native: 2.*
+
+**Editor implementation cost.** EPUB editing is XHTML/CSS editing. In a webview, CodeMirror 6 gives
+syntax highlighting, folding, linting, and multi-cursor for free, with a live preview that is
+literally the same engine as the reader. Outside a webview, every one of those is bespoke on top of
+Parley. Sigil and Calibre's editor both exist because this problem is large.
+*Tauri: 5, Dioxus Native: 2.*
+
+**Cross-platform reach.** Tauri ships all five targets now. Dioxus Native ships desktop and
+Android; iOS is blocked indefinitely on Blitz-on-Metal. Note the irony: iOS *mandates* WKWebView for
+web content anyway, so on that platform the webview is not a compromise, it is the only option.
+*Tauri: 5, Dioxus Native: 2.*
+
+**Rendering determinism.** WKWebView, WebView2, and WebKitGTK are three text layout engines with
+three sets of bugs. Write once, test three times. Identical pagination across devices — the property
+that makes "page 214 of 480" and annotation anchoring stable — is not achievable on webviews without
+substantial per-platform correction. Vello + Parley produce byte-identical output everywhere; Loki
+already proved this with `vello_cpu` goldens. *Tauri: 2, Dioxus Native: 5.*
+
+**Untrusted content security.** This is Tauri's real weakness and it deserves more than a line.
+Futhark opens arbitrary files from the internet. EPUB 3 permits scripted content. A webview
+rendering a hostile EPUB, in a process holding an IPC bridge to a Rust backend with filesystem
+access, is a privilege-escalation surface. It is defensible — sandboxed iframe on a distinct
+origin, strict CSP, Tauri's isolation pattern, script stripping at ingest — but it must be designed
+deliberately and audited, not assumed (see ADR-F005, ADR-F006, R2). Dioxus Native has no JS engine
+at all: scripted EPUB content simply does not execute, and the threat surface collapses to parser
+memory safety, which safe Rust already covers. *Tauri: 2, Dioxus Native: 5.*
+
+**AppThere stack reuse.** Dioxus Native reuses `appthere-canvas`, the shared `vello::Renderer`,
+`FontResources`, the render-cache tiering, the memory work that took Loki from 2.83 GB to 750 MB,
+and the `appthere-conformance` golden harness. Tauri reuses essentially none of the presentation
+stack — though it reuses every crate in §4.1, which is most of the actual program.
+*Tauri: 1, Dioxus Native: 5.*
+
+**Touch and gesture.** A reader is almost entirely gestural: swipe to page, pinch to zoom,
+long-press to select, drag handles to extend selection. Webviews get all of this natively.
+Spike G1 flags multi-touch as unvalidated on Blitz Android — a moderate risk for Loki's timeline UI,
+a critical-path risk for Futhark, where gesture *is* the interface. *Tauri: 4, Dioxus Native: 2.*
+
+**Footprint.** Tauri: 3–8 MB bundles, ~45 MB RSS typical; no bundled Chromium. Dioxus Native: no
+webview process, tighter control, and Loki's memory discipline transfers directly.
+*Tauri: 3, Dioxus Native: 4.*
+
+**PDF integration.** `hayro` renders in Rust in both worlds, so the delta is only transport. Under
+Dioxus Native, `hayro-interpret`'s `Device` can emit straight into a Vello scene — no rasterize,
+no copy, and zoom re-renders at native resolution. Under Tauri, tiles must be rasterized and handed
+to the webview; done via a custom URI scheme serving WebP tiles (never base64 over IPC — see
+ADR-F008) this is fine, but it is a copy and a re-encode. *Tauri: 3, Dioxus Native: 5.*
+
+**Long-term dependency control.** Tauri's risk is three divergent webviews Kevin does not control
+and cannot patch. Dioxus Native's risk is Blitz's roadmap, which Kevin also does not control but
+*can* patch — the `patches/` directory already carries fixes for `blitz-dom`, `blitz-shell`, and
+`fontique`. *Tauri: 3, Dioxus Native: 4.*
+
+### 6.4 Weighted score
+
+| Criterion | Weight | Tauri 2 | Dioxus Native |
+|---|---:|---:|---:|
+| EPUB 3 CSS/layout fidelity | 20% | 5 | 2 |
+| Editor implementation cost | 12% | 5 | 2 |
+| Cross-platform reach (incl. iOS) | 12% | 5 | 2 |
+| Untrusted-content security | 12% | 2 | 5 |
+| Rendering determinism | 10% | 2 | 5 |
+| AppThere stack reuse | 10% | 1 | 5 |
+| Touch/gesture input | 8% | 4 | 2 |
+| Footprint | 6% | 3 | 4 |
+| PDF integration path | 5% | 3 | 5 |
+| Dependency control | 5% | 3 | 4 |
+| **Weighted total** | **100%** | **3.54** | **3.33** |
+
+### 6.5 Recommendation
+
+**Adopt Tauri 2 for Futhark's presentation shell.** (ADR-F001)
+
+The margin is thin — 3.54 to 3.33 — and it should be read as *thin*, not decisive. The
+recommendation rests on one argument, and it is worth stating plainly:
+
+> Futhark's fidelity requirement is CSS conformance, and CSS conformance is a decades-deep problem
+> that already has a correct, free, per-platform implementation. Reimplementing it is not a
+> differentiator for an ebook reader — it is a tax. Loki's situation was the opposite, which is why
+> Loki's answer was the opposite.
+
+For a solo developer, the cost side is decisive even where the score is close. The Dioxus Native
+path implies owning paginated CSS multicol layout, vertical writing modes, ruby, MathML, text
+selection over a paginated flow, IME, and a source-code editor — before the first user opens a book.
+That is a multi-year project sitting on the critical path of *every* feature.
+
+**Sensitivity.** This flips under two conditions, either of which is sufficient:
+
+1. **iOS drops from v1** and platform-identical typography is elevated to a product requirement
+   (e.g. Futhark's differentiator becomes "the reader whose typography is better than everyone
+   else's"). Re-weighting determinism to 20% and dropping reach to 4% gives Dioxus Native 3.63
+   to Tauri's 3.24.
+2. **Spike F1 fails** — see §10. If a webview cannot deliver stable, position-preserving
+   pagination via CSS multicol across all three engines, Tauri's headline advantage evaporates,
+   because paginated reflow *is* the reader.
+
+Spike F1 therefore gates ADR-F001, and ADR-F001 is provisional until F1 returns.
+
+**The hedge, and it is a real one.** §4.1 keeps every domain crate free of UI dependencies, enforced
+in CI. If F1 fails, or if Blitz's CSS coverage closes the gap in eighteen months, the shell is
+replaceable without touching the codecs, the IR, the catalog, the annotation model, or sync — which
+is roughly 80% of the program by volume. Do not let shell types leak downward. That rule is what
+buys the option.
+
+**What is genuinely lost.** Be honest about it: the Loki Android multi-instance work
+(multiprocess + Loro relay) does not transfer, the shared `vello::Renderer` and `FontResources`
+memory work does not transfer, and the `appthere-canvas` extraction does not get a second consumer.
+Futhark becomes the first AppThere app on a different presentation stack, and the suite loses some
+architectural uniformity. That is a genuine cost, and "consistency with the rest of the suite" is a
+legitimate reason to overrule this recommendation — it just is not, on the evidence, a technical one.
+
+### 6.6 Rejected alternatives
+
+| Option | Why rejected |
+|---|---|
+| Hybrid: Dioxus Native chrome + webview content viewport | Two toolkits, two input models, two font stacks, two theming systems, and the security boundary lands in the hardest place. Worst of both. |
+| Electron | Bundle size, memory, and no Rust-native core. Non-starter for a suite built on Rust. |
+| Kotlin Multiplatform + Compose | Strong on mobile, weak on desktop Linux, and abandons the Rust core entirely. |
+| Flutter | Own text stack, no EPUB advantage over Blitz, and non-Rust. Same reimplementation tax without the AppThere reuse. |
+| Native per-platform UI (SwiftUI/Compose/GTK) | Four UIs for a solo developer. CommerceKit can afford this because its clients are thin; Futhark's client is the product. |
+
+---
+
+## 7. Shell architecture (conditional on ADR-F001)
+
+### 7.1 Process and origin model
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Rust core (Tauri backend)                                   │
+│  futhark-* crates · SQLite · hayro · codecs · Loro sync     │
+└───────────┬───────────────────────────┬─────────────────────┘
+            │ Tauri IPC (commands)      │ custom URI schemes
+            │ capability-gated          │ (no IPC bridge bound)
+┌───────────▼───────────────┐  ┌────────▼────────────────────┐
+│ App origin                │  │ Content origin              │
+│  tauri://localhost        │  │  futhark-content://<book-id>│
+│  Svelte UI: library,      │  │  sandboxed iframe           │
+│  chrome, settings,        │  │  strict CSP, no scripts,    │
+│  editor source pane       │  │  no network, no __TAURI__   │
+└───────────────────────────┘  └─────────────────────────────┘
+```
+
+The content origin is the security boundary (Sandbox). Book resources are served from the Rust side
+through a registered asynchronous URI scheme, so relative `href`s, `@font-face`, and stylesheet
+imports resolve naturally — the fidelity benefit and the security benefit come from the same
+mechanism. The content iframe never has `window.__TAURI__` bound.
+
+### 7.2 Frontend stack
+
+Svelte, consistent with CommerceKit's web tier. Semantic HTML5, no component library, CSS Grid
+layout. CodeMirror 6 for the editor source pane. No client-side routing framework.
+
+### 7.3 PDF transport
+
+`hayro` rasterizes tiles in Rust. Tiles are encoded WebP and served over
+`futhark-pdf://<doc-id>/<page>/<z>/<x>/<y>`, cached in the Rust process with the same three-tier
+Hot/Warm/Cold policy Loki uses in `loki-render-cache`. Never base64 over IPC.
+
+---
+
+## 8. Architecture Decision Records
+
+| ID | Decision | Status |
+|---|---|---|
+| **ADR-F001** | Tauri 2 is the presentation shell for all five targets. | **Provisional — gated on Spike F1** |
+| **ADR-F002** | All `futhark-*` domain crates are UI-framework-agnostic; CI fails on any shell dependency in a domain crate. | Accepted |
+| **ADR-F003** | Futhark does **not** reuse Loki's document IR. EPUB's model is XHTML+CSS; forcing it through a paragraph-oriented IR is lossy and pointless when the renderer consumes XHTML anyway. | Accepted |
+| **ADR-F004** | Document Model IR is a thin normalization layer — spine, resource map, ToC, metadata — over format-native content, not a universal document model. Content stays in its native form as far down as possible. | Accepted |
+| **ADR-F005** | Book content renders in a sandboxed iframe on a distinct custom-scheme origin with no IPC binding. | Accepted |
+| **ADR-F006** | EPUB scripted content is stripped at ingest by default. A per-book opt-in exists but remains sandboxed and network-denied. Futhark is a reader, not a browser. | Accepted |
+| **ADR-F007** | Book resources are served via a registered async URI scheme, never inlined into the DOM or passed over IPC. | Accepted |
+| **ADR-F008** | PDF tiles are WebP over a custom scheme, not base64 over IPC. | Accepted |
+| **ADR-F009** | `hayro` for all PDF parsing and rasterization. No PDFium, no MuPDF, no C dependency. | Accepted |
+| **ADR-F010** | `futhark-mobi` is bespoke safe Rust, bidirectional (read and write). No `libmobi` FFI. | Accepted |
+| **ADR-F011** | EPUB reader/writer starts from `rbook`; adoption confirmed or reversed by Spike F2 on round-trip fidelity. | Provisional |
+| **ADR-F012** | Editor saves must be byte-lossless for untouched files. Comments, attribute order, whitespace, and unknown elements are preserved. | Accepted |
+| **ADR-F013** | Paginated reflow uses CSS multi-column inside the content iframe, with scroll-offset paging. | Provisional — gated on Spike F1 |
+| **ADR-F014** | Reading position is stored as EPUB CFI where available, with a text-anchored fallback (prefix/suffix quote matching) for MOBI and malformed EPUBs. | Accepted |
+| **ADR-F015** | Annotations anchor on the same locator scheme as position, and re-anchor by quote matching when the underlying document changes. | Accepted |
+| **ADR-F016** | SQLite via `sqlx` for the catalog. Blobs (covers, extracted resources) live on the filesystem, referenced by content hash. Not in the database. | Accepted |
+| **ADR-F017** | Books are referenced in place by default. Futhark does not restructure the user's folders unless "managed library" is explicitly enabled. | Accepted |
+| **ADR-F018** | Sync (Sync) replicates annotations, bookmarks, and reading position only — never document bytes. Loro CRDT over the AppThere Cloud relay, reusing Loki's transport. | Accepted |
+| **ADR-F019** | Sync is optional and off by default. Futhark is fully functional with no account. | Accepted |
+| **ADR-F020** | Deduplication is by content hash first, then by ISBN, then by fuzzy title+author. Never automatic deletion — duplicates are surfaced, not resolved. | Accepted |
+| **ADR-F021** | Futhark implements no DRM circumvention of any kind, for any format, and ships no code path that assists it. DRM-protected files report as such and stop. | Accepted — non-negotiable |
+| **ADR-F022** | **KFX is out of the program in both directions.** No reader, no writer, no bridge to Kindle Previewer. Rationale in §5.3 and D6. | Accepted |
+| **ADR-F023** | Metadata providers (Metadata) are opt-in per lookup. No background network calls without explicit user action. | Accepted |
+| **ADR-F024** | TTS uses platform speech APIs via Tauri plugins, not a bundled engine. | Accepted |
+| **ADR-F025** | Conformance goldens use `vello_cpu`-equivalent determinism where possible; where the webview renders, goldens are per-engine with an explicit tolerance budget. | Accepted |
+| **ADR-F026** | Untrusted-input parsing (Codecs) is fuzzed in CI. Every codec crate gets a `cargo-fuzz` target from the day it is created, not retrofitted. | Accepted |
+| **ADR-F027** | KF8 export emits KF8-only AZW3. Dual KF7+KF8 output is **not** built (D9). Reading dual-format files is unaffected. | Accepted |
+| **ADR-F028** | CSS downconversion to the KF8 subset produces a structured, user-visible loss report. Export never silently degrades a book. | Accepted |
+| **ADR-F029** | Futhark never fabricates ASINs or other vendor identifiers to unlock device features. Exported metadata reflects the actual book. | Accepted |
+| **ADR-F030** | KF8 export round-trips through the conformance harness: every exported AZW3 is re-parsed by `futhark-mobi` and compared against the source IR before the file is handed to the user. | Accepted |
+| **ADR-F031** | Export ships on all five platforms at parity. `futhark-convert` contains no platform-conditional code; one implementation, one conformance suite, no feature flags. | Accepted |
+| **ADR-F032** | File delivery is abstracted behind a `DeliverTarget` trait with two implementations: native save dialog on desktop, and `appthere-file-access` plus share-sheet handoff on mobile. The compiler never touches a path. | Accepted |
+| **ADR-F033** | `loki-file-access` is promoted to `appthere-file-access` rather than vendored or forked, following the `loki-acid` → `appthere-conformance` and `appthere-canvas` precedents. Futhark is its second consumer, which is the justification for promotion. | Provisional — see D11 |
+
+---
+
+## 9. Risk register
+
+| ID | Risk | Sev | Likelihood | Mitigation |
+|---|---|---|---|---|
+| **R1** | CSS multicol pagination behaves inconsistently or unstably across WKWebView / WebView2 / WebKitGTK, breaking position stability. | **Critical** | Medium | Spike F1 before any other work. Gates ADR-F001 and ADR-F013. |
+| **R2** | Hostile EPUB escapes the content sandbox and reaches the Rust backend. | **Critical** | Low | ADR-F005/F006/F007. External security review before public release. Threat model as a Spec 01 deliverable. |
+| **R3** | Users expect Kindle-library support and find Futhark opens none of their purchased KFX books. Dropping KFX removes the code risk, not the expectation. | High | **High** | Product copy states the Kindle story as "export to your Kindle", never "read your Kindle library". Surface a clear, non-apologetic message on encountering KFX. |
+| **R4** | `futhark-mobi` KF8 parsing is a larger effort than estimated; MOBI slips out of v1. | High | Medium | Phase-gate it. MOBI is Phase 4, not Phase 1. Ship EPUB-only if needed. |
+| **R5** | `rbook` cannot round-trip losslessly; `futhark-epub` becomes a bespoke build, adding a phase. | High | Medium | Spike F2 in Phase 0. |
+| **R6** | Blitz's CSS coverage closes the gap and the Tauri decision looks wrong in retrospect. | Medium | Low | ADR-F002 keeps the shell replaceable. Re-evaluate at Phase 5. |
+| **R7** | Encrypted/password-protected PDFs cannot be opened (`hayro` limitation). Common in library-loan and enterprise documents. | High | **High** | Detect and report clearly. Upstream contribution is the only real fix; scope it as a possible Phase 6 item. |
+| **R8** | `hayro` performance on large scanned PDFs is inadequate on mobile — performance is explicitly not yet optimized upstream. | High | Medium | Benchmark in Spike F3. Aggressive tile caching, background pre-render, downsampled proxies. |
+| **R9** | Webview memory on mobile with a large book open triggers Android LMK / iOS jetsam. | Medium | Medium | Spine-window loading; never load the whole book into one document. Reuse Loki's memory-tracking harness. |
+| **R10** | Text selection across a multicol-paginated iframe is unreliable, breaking highlights. | High | Medium | Fold into Spike F1 acceptance criteria — selection is not a separate concern from pagination. |
+| **R11** | Library-wide full-text search over 10k books needs an index Futhark has no story for. | Medium | Medium | Deferred to Phase 5. Evaluate `tantivy` then. |
+| **R12** | iOS App Store rejection: readers that reach external stores trigger IAP rules; sideloading affordances may draw scrutiny. | Medium | Low | No purchase paths in v1 (§1.2). Export is local-file-out only, no store interaction. |
+| **R13** | Vertical writing modes and ruby render acceptably on WebKit but poorly on WebView2, fragmenting CJK support. | Medium | Medium | Add CJK titles to the conformance corpus from Phase 1, not as an afterthought. |
+| **R14** | Annotation re-anchoring fails after a user edits a book they have annotated — a workflow only Futhark creates, by shipping reader and editor together. | Medium | **High** | Design for it explicitly in Annotations. Quote-based fallback (ADR-F015) plus a visible "orphaned annotation" state rather than silent loss. |
+| **R15** | Amazon further restricts sideloading, or drops AZW3 support on new devices, stranding the KF8 export path. Send-to-Kindle was already cut for unsupported Kindles in April 2026 and older formats are being phased out. | Medium | Medium | Keep EPUB export as the primary Kindle path (Send to Kindle accepts it). KF8 export is an enhancement, never the only route. Monitor device support each Phase gate. |
+| **R16** | KF8 export produces files that appear to work but fail subtly on device — bad ToC, missing cover, mis-sized text records. Failures are silent and only visible on hardware. | High | Medium | ADR-F030 round-trip verification, plus a physical-device test matrix (Paperwhite, Scribe, Kindle app) as a Phase 6 exit criterion. |
+| **R17** | CSS downconversion loses layout fidelity badly enough on complex books that users blame Futhark rather than the format ceiling. | Medium | Medium | ADR-F028 loss report shown before export completes, with a preview diff for the worst-affected sections. |
+| **R18** | Mobile file delivery is harder than desktop parity implies. Tauri's save dialog is still an open enhancement request on both Android and iOS; `open` returns `content://` URIs on Android and `file://` URIs on iOS rather than paths; there is no folder picker on Android and no first-party external-storage permission plugin. | Low | Low | **Largely retired by prior art.** The abandoned Tauri/Lexical Loki Text build already solved Android file I/O, and `loki-file-access` is a working read/write implementation. Futhark consumes it via `appthere-file-access` (D11) rather than rediscovering the problem. Residual risk is iOS coverage and create-new-file flows — see R20. |
+| **R20** | `loki-file-access` may not cover what export actually needs: iOS as well as Android, and `ACTION_CREATE_DOCUMENT`-style *create-new-file* flows rather than read/write of files the user already picked. | Medium | Medium | Audit the crate's actual surface before Phase 5 (D11). Gaps are incremental additions to a working crate, not a new bridge from scratch. |
+| **R19** | Compiling a large image-heavy EPUB flattens the spine into a single blob and spikes memory, triggering Android LMK or iOS jetsam mid-export. Export is now a mobile feature, so this is on the critical path. | Medium | Medium | Stream PalmDOC text records to disk incrementally rather than building the whole blob in memory. The exact-4096-byte record constraint makes chunked emission the natural implementation anyway. Reuse Loki's memory-tracking harness. |
+
+---
+
+## 10. Phase 0 spikes
+
+All three block Spec 01. None should take more than a week.
+
+| ID | Spike | Question | Pass criteria |
+|---|---|---|---|
+| **F1** | Multicol pagination | Can a sandboxed iframe paginate a real 900-page EPUB via CSS multicol, on all three webview engines, with stable page counts, correct reflow on font-size change, position preservation, and working text selection? | Page count deterministic per settings tuple; position preserved across resize; selection returns usable ranges on all three engines. **Gates ADR-F001.** |
+| **F2** | EPUB round-trip | Does `rbook` (or a `quick-xml` build) round-trip a corpus of 200 real EPUBs byte-identically when nothing is edited? | ≥95% byte-identical; the remainder explainable and non-destructive. |
+| **F3** | PDF on mobile | Can `hayro` render a 300 MB scanned PDF at acceptable pan/zoom latency on the Lenovo LOQ and a mid-range Android device? | First tile <150 ms; sustained pan without visible tile pop at 60 fps target. |
+
+---
+
+## 11. Roadmap
+
+| Phase | Name | Contents | Exit criterion |
+|---|---|---|---|
+| **0** | Spikes & foundation | F1–F3, workspace scaffold, CI (300-line ceiling, `forbid(unsafe_code)`, SPDX, clippy, fuzz targets), conformance corpus assembly. | All spikes returned; ADR-F001 confirmed or reversed. |
+| **1** | EPUB read path | Ingest, Codecs(EPUB), Document Model, Navigation, Rendering, Sandbox. Reader only. Desktop only. | Open, paginate, and navigate an EPUB 3 with stable position. |
+| **2** | Library | Catalog, Storage, Metadata. Catalog, covers, collections, search, dedup, watched folders. | J1 met: 4,000 files ingested in under two minutes. |
+| **3** | Reading experience | Annotations, Progress, Presentation. Annotations, bookmarks, progress, themes, typography, accessibility, TTS. | J2, J4 met. Annotations survive settings changes. |
+| **4** | Formats (read) | Codecs (MOBI/KF8 read), Codecs (PDF). | J7, J8 met. PDF and KF8 at parity with EPUB for reading. |
+| **5** | Mobile | Android then iOS. Gesture layer, LMK/jetsam resilience, platform packaging. Library-wide search evaluated. **Audit and promote `appthere-file-access` early (D11, R20)** — it gates J10 in Phase 6. | Reader and library shipping on both mobile platforms; share-sheet delivery proven. |
+| **6** | Editor & Conversion | Editor: source editing, live preview, validation, package operations, undo. Conversion: EPUB to KF8 compiler, CSS downconversion, loss reporting, AZW3 export on all five platforms. | J6, J9, J10 met. Byte-lossless saves (ADR-F012). Device test matrix passed (R16). |
+| **7** | Sync & polish | Sync. CRDT annotation/position sync, device handoff. CBZ/CBR if cheap. Security review. | J3 met. External security review passed. |
+
+Phases 1–3 are the minimum viable product; Futhark could ship publicly as an EPUB-only reader and
+library at the end of Phase 3 without embarrassment. That is a deliberate property of the ordering.
+
+---
+
+## 12. Open decisions (blocking Spec 01)
+
+| ID | Decision | Notes |
+|---|---|---|
+| **D1** | Confirm or reverse ADR-F001 after Spike F1. | Everything downstream depends on this. |
+| **D2** | Is iOS in v1, or is it Phase 5+ and possibly later? | This is the largest single input to the D1 sensitivity analysis (§6.5). |
+| **D3** | Managed library vs. reference-in-place as the *default* (ADR-F017). | Calibre chose managed and users resent it; reference-in-place is harder to keep consistent. |
+| **D4** | Does the editor target EPUB 3 only, or EPUB 2 as well? | EPUB 2 editing roughly doubles the validation surface for a shrinking format. |
+| **D5** | Sync: reuse the Loki relay verbatim, or a Futhark-specific document type on the same transport? | Affects whether Sync can start before the Loki server ships. |
+| **D6** | ~~Legal review: ship `futhark-kfx`?~~ **Resolved: KFX dropped** (ADR-F022). Residual question is narrower — does KF8 *authoring* need legal review at all? | Provisional answer: no. Writing a DRM-free file in a reverse-engineered, publicly documented format circumvents nothing and implicates no §1201 question. Worth a short confirmatory opinion, not a QSA-scale gate. |
+| ~~**D9**~~ | ~~Dual KF7+KF8 output?~~ **Resolved: no.** KF8 only. | Served pre-2011 devices at the cost of a second output path testable only on hardware nobody has. |
+| ~~**D10**~~ | ~~Export on mobile?~~ **Resolved: yes, at parity** (ADR-F031). | Compiler is platform-agnostic; parity removes `cfg` divergence and halves the test matrix. Mobile users deliver via share sheet to cloud storage or removable media. |
+| **D11** | Promote `loki-file-access` to `appthere-file-access`, or keep it Loki-local and depend on it directly? | Promotion matches the established extraction pattern and a second consumer justifies it. Blocking sub-questions: (a) does it cover iOS or Android only? (b) does it support create-new-file, or only read/write of already-picked files? (c) was it written against the old Tauri stack or the current Dioxus Native one — if the latter, does its context/activity acquisition assume a non-Tauri host? |
+| **D7** | Conformance corpus sourcing and licensing. | Loki's ACID suite was generated; ebooks mostly cannot be. Project Gutenberg + IDPF/W3C test EPUBs + `hayro`'s PDF corpus are the redistributable base. |
+| **D8** | Does Futhark ship as a standalone product or as part of an AppThere suite bundle? | Affects packaging, licensing, and whether the shell divergence in §6.5 matters commercially. |
+
+---
+
+## 13. Engineering standards
+
+Inherited from the AppThere program, unchanged:
+
+- Rust 2024 edition.
+- 300-line file ceiling, enforced in CI.
+- `#![forbid(unsafe_code)]` at every crate root; exceptions documented and reviewed.
+- `thiserror` for typed errors. No `unwrap()` or `expect()` in library code.
+- Apache-2.0 SPDX headers, correct ordering.
+- All user-visible strings through `fl!()`. No hardcoded English.
+- Audit-first: no implementation before the corresponding spec is accepted.
+
+Futhark-specific additions:
+
+- **Every codec crate ships a `cargo-fuzz` target at creation** (ADR-F026). Futhark's inputs are
+  hostile by default in a way Loki's mostly are not.
+- **No panics on malformed input, ever.** A corrupt book renders partially or reports an error; it
+  never takes down the process. This is a test requirement, not a guideline.
+- **CI enforces that no `futhark-*` domain crate depends on the shell** (ADR-F002). This is the
+  mechanism that keeps §6's decision reversible, and it is worth a dedicated check.

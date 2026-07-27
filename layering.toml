@@ -1,0 +1,29 @@
+# SPDX-FileCopyrightText: 2026 Kevin Carlson
+# SPDX-License-Identifier: Apache-2.0
+#
+# Enforces ADR-F002: no domain crate may depend on the presentation shell.
+# This is what keeps the ADR-F001 shell decision reversible. Both candidate
+# stacks are denied, because the decision is still provisional (Spike F1).
+
+# Crates that belong to a presentation shell and must never appear in a
+# domain crate's [dependencies] or [build-dependencies].
+shell_crates = [
+  # Tauri stack
+  "tauri", "tauri-build", "tauri-runtime", "tauri-runtime-wry", "wry", "tao",
+  # Dioxus Native / Blitz stack
+  "dioxus", "dioxus-native", "dioxus-desktop", "dioxus-web", "dioxus-core",
+  "blitz", "blitz-dom", "blitz-shell", "blitz-paint", "blitz-traits",
+  # Windowing / GPU / vector paint — presentation concerns
+  "winit", "wgpu", "vello", "vello_cpu", "stylo", "taffy",
+]
+
+# Prefixes are matched too, so plugin families need only one entry.
+shell_prefixes = ["tauri-plugin-", "dioxus-", "blitz-"]
+
+# Exemptions require a reason and an ADR. An exemption without both is a
+# check failure, not a bypass.
+# [[exemptions]]
+# crate  = "futhark-render"
+# allows = "vello"
+# reason = "..."
+# adr    = "ADR-Fxxx"
