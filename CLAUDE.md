@@ -141,6 +141,7 @@ cargo deny check            # license + advisory audit
 ./scripts/check-line-limit  # 300-line ceiling
 ./scripts/check-spdx        # header presence and ordering
 ./scripts/check-layering    # no shell deps in domain crates (ADR-F002)
+./scripts/check-adr-numbers # duplicate/ambiguous ADR identifiers
 ```
 
 ---
@@ -149,7 +150,9 @@ cargo deny check            # license + advisory audit
 
 - Build shell code before Spike F1 resolves.
 - Add KFX support in any form.
-- Resolve an open decision (D1–D11) unilaterally.
+- Resolve an open decision (D1–D14) unilaterally.
+- Mint an ADR number from the end of a section. Take the next number above the
+  high-water mark across the whole document; `check-adr-numbers` enforces it.
 - Introduce a C dependency or an `unsafe` block to work around a missing crate.
 - Add `unwrap()` to library code because the error path is inconvenient.
 - Exceed 300 lines and plan to split it later.

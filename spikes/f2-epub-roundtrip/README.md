@@ -74,7 +74,7 @@ that `futhark-epub` must preserve, and its problem is that it has no verdict to
 hang a caveat on — a thin result on a normalized corpus looks exactly like a
 thin ecosystem. Two types carry the caveat instead.
 
-**ADR-F050 — a fixed catalogue, three states per feature.** `Observed`,
+**ADR-F052 — a fixed catalogue, three states per feature.** `Observed`,
 `CheckedAndAbsent`, `NotCovered`. The third is the one that matters: it means
 *no detector exists*, and it is evidence about the harness rather than about the
 corpus. Four entries in `src/catalogue.rs` deliberately have no detector, so
@@ -193,7 +193,7 @@ extra one over-classification.
 | `tests/instrument.rs` | Runs the fixtures in CI so drift fails the build. |
 | `src/roundtrip.rs` | Open with rbook, write back untouched. A panic is a finding, not a crash. |
 | `src/verdict.rs` | ADR-F047 as a type. There is no `Verdict::Pass`. |
-| `src/catalogue.rs` | ADR-F050: the fixed feature list and its three states. Some entries have no detector on purpose. |
+| `src/catalogue.rs` | ADR-F052: the fixed feature list and its three states. Some entries have no detector on purpose. |
 | `src/detect.rs` | The detectors behind `Observed` and `CheckedAndAbsent`. Scans, never parses. |
 | `src/floor.rs` | ADR-F051: `FeatureFloor`, `widen()`, and the only type that may be read as a specification. |
 | `src/provenance.rs` | What a floor rests on, and what widening one costs. |

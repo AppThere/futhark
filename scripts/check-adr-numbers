@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Kevin Carlson
+# SPDX-License-Identifier: Apache-2.0
+"""Fail on duplicate ADR identifiers in the program spec.
+
+An ADR number is a citation target: code, findings docs, and commit messages
+point at it. A duplicate silently makes every one of those citations ambiguous,
+and nothing in a review catches it because both rows read correctly on their own.
+
+Ordering is deliberately *not* checked. The ADR table is an append-only log and
+a related pair may land out of order — F051 sitting above F052 is normal, not a
+defect. Claiming to enforce monotonicity while not enforcing it would leave a
+reader believing position carries meaning it does not.
+"""
+from __future__ import annotations
+import re, sys
+from collections import Counter
+from pathlib import Path
+
+SPEC = Path(__file__).resolve().parent.parent / "docs" / "FUTHARK_PROGRAM_SPEC.md"
+ROW = re.compile(r"\|\s*~?~?\*\*(ADR-F(\d+))\*\*")
+
+
+def main() -> int:
+    if not SPEC.exists():
+        print(f"spec not found: {SPEC}", file=sys.stderr)
+        return 1
+    text = SPEC.read_text(encoding="utf-8")
+
+    ids, nums = [], []
+    for line in text.splitlines():
+        m = ROW.match(line)
+        if m:
+            ids.append(m.group(1))
+            nums.append(int(m.group(2)))
+
+    if not ids:
+        print("no ADRs found — check the row pattern", file=sys.stderr)
+        return 1
+
+    fail = False
+    dupes = {k: v for k, v in Counter(ids).items() if v > 1}
+    if dupes:
+        fail = True
+        print("duplicate ADR identifiers:", file=sys.stderr)
+        for k, v in sorted(dupes.items()):
+            print(f"  {k} appears {v} times — every citation to it is ambiguous", file=sys.stderr)
+
+    high = max(nums)
+    missing = sorted(set(range(1, high + 1)) - set(nums))
+    if missing:
+        # Gaps are legal (a number may be reserved or withdrawn) but worth surfacing.
+        print(f"note: unused ADR numbers below the high-water mark {high}: "
+              f"{', '.join(f'F{n:03d}' for n in missing)}")
+
+    if fail:
+        print(f"\nNext free identifier is ADR-F{high + 1:03d}. Mint from the "
+              f"high-water mark, never from the end of a section.", file=sys.stderr)
+        return 1
+
+    print(f"adr-numbers: ok ({len(ids)} ADRs, high-water mark ADR-F{high:03d})")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

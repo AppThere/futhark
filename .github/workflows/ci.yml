@@ -22,6 +22,7 @@ jobs:
       - run: ./scripts/check-line-limit
       - run: ./scripts/check-spdx
       - run: ./scripts/check-layering
+      - run: ./scripts/check-adr-numbers
 
   fmt:
     name: Format

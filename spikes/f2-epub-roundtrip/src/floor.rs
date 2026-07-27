@@ -35,7 +35,7 @@ use crate::provenance::{CorpusProvenance, Counts, Disposition, WideningGap};
 /// `into_spec()`, or `Deref` to a feature list — see [`FeatureFloor::widen`].
 #[derive(Debug, Clone, Serialize)]
 pub struct FeatureFloor {
-    /// Catalogue this was measured against (ADR-F050). A floor from a smaller
+    /// Catalogue this was measured against (ADR-F052). A floor from a smaller
     /// catalogue is not comparable to one from a larger.
     pub catalogue_version: String,
     /// The corpus behind it.
@@ -162,7 +162,7 @@ impl FeatureFloor {
         })
     }
 
-    /// Render the floor, with the arithmetic ADR-F050 exists to produce.
+    /// Render the floor, with the arithmetic ADR-F052 exists to produce.
     pub fn render(&self) -> String {
         let c = self.counts();
         let mut s = format!(

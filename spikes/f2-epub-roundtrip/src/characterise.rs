@@ -9,7 +9,7 @@
 //! preserve?**
 //!
 //! It has no verdict to hang a caveat on, which is why it has two types
-//! instead. Every catalogue feature resolves to one of three states (ADR-F050),
+//! instead. Every catalogue feature resolves to one of three states (ADR-F052),
 //! and the result is a [`FeatureFloor`] rather than a requirements list
 //! (ADR-F051). Nothing here can produce a list of requirements; only an
 //! explicit widening can, and it must say what corpus it widened from.

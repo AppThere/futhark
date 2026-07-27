@@ -3,7 +3,7 @@
 
 //! F2b's fixed feature catalogue and its three states.
 //!
-//! ADR-F050 (feature catalogue): an open-ended "what did we find" list cannot
+//! ADR-F052 (feature catalogue): an open-ended "what did we find" list cannot
 //! distinguish a construct the corpus lacked from one the harness never looked
 //! for. Both come back as silence. A fixed catalogue with three states can:
 //!

@@ -10,9 +10,9 @@ SPDX-License-Identifier: Apache-2.0
 | Document | `SPIKE_F2_EPUB_ROUNDTRIP.md` |
 | Spike ID | F2 |
 | Status | **Screening result returned on synthetic input. ADR-F011 reversed in spec 0.12.0 on this evidence. F2b instrument built; not yet run against real books.** |
-| Version | 0.3.0 |
+| Version | 0.3.1 |
 | Date | 2026-07-27 |
-| Depends on | `FUTHARK_PROGRAM_SPEC.md` 0.13.0 — §10, R5, ADR-F012, ADR-F036, ADR-F041, ADR-F047, ADR-F048, ADR-F050, ADR-F051 |
+| Depends on | `FUTHARK_PROGRAM_SPEC.md` 0.13.1 — §10, R5, ADR-F012, ADR-F036, ADR-F041, ADR-F047, ADR-F048, ADR-F050, ADR-F051, ADR-F052 |
 | Harness | `spikes/f2-epub-roundtrip/` |
 | Raw results | `f2-manifest.json`, regenerated per run |
 
@@ -187,7 +187,7 @@ produces an enumeration, and a thin enumeration on a normalized corpus is
 indistinguishable from a thin ecosystem. The caveat has nowhere to live except
 prose — which is precisely the arrangement that failed in §2.1 of this document.
 
-**ADR-F050 — a fixed catalogue, three states.** `Observed`,
+**ADR-F052 — a fixed catalogue, three states.** `Observed`,
 `CheckedAndAbsent`, `NotCovered`. The third means *no detector exists*: evidence
 about the harness, never about the corpus. Four catalogue entries have no
 detector deliberately, so the state is non-empty by construction — a catalogue
@@ -236,12 +236,22 @@ counted by family rather than by string because "InDesign 17" and "InDesign 19"
 are one toolchain. The verdict names the families it counted: **a threshold can
 only be trusted or not; a named list can be argued with.**
 
-### 7.3 One editorial note
+### 7.3 The catalogue ADR is F052
 
-Spec 0.13.0 carries **two ADRs numbered F050** — the feature catalogue and the
-producer-family rule. Both are cited in this document and in the code at the
-number the spec gives them. Renumbering is the spec author's call, not the
-spike's.
+Spec 0.13.0 minted two ADRs numbered F050. Resolved at 0.13.1: the
+producer-family rule is older and keeps the number; the feature catalogue is
+**ADR-F052**, and this document, `catalogue.rs`, `floor.rs`, `characterise.rs`,
+and the F2 README cite it there. `family.rs`, `manifest.rs`, and `verdict.rs`
+still cite F050 and are correct to.
+
+The number is the interesting part rather than the sweep. An ADR identifier is a
+citation target, and a duplicate makes every citation to it ambiguous while both
+rows still read correctly in isolation — there is no reading of either row that
+looks wrong. `scripts/check-adr-numbers` now fails the build on one and reports
+the next free identifier; run against 0.13.0 it names ADR-F052, which is the
+number the fix uses. That control matters more than the check passing
+afterwards: a checker written against an already-repaired file has never been
+shown to detect anything.
 
 ## 8. Reproducing
 

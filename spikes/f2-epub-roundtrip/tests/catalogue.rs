@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Kevin Carlson
 // SPDX-License-Identifier: Apache-2.0
 
-//! ADR-F050's three states, and the one that has to stay non-empty.
+//! ADR-F052's three states, and the one that has to stay non-empty.
 //!
 //! The catalogue's whole value is that `CheckedAndAbsent` and `NotCovered` are
 //! different claims — one is about the corpus, one is about the harness. A

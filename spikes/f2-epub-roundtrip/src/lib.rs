@@ -16,7 +16,7 @@
 //! F2b reuses the same reading machinery for a different question — what real
 //! EPUBs *contain* that `futhark-epub` must preserve. Its deliverable has no
 //! verdict to carry a caveat, so the caveat is two types: a three-state feature
-//! catalogue (ADR-F050) and a floor that cannot be read as a specification
+//! catalogue (ADR-F052) and a floor that cannot be read as a specification
 //! without an explicit widening (ADR-F051).
 //!
 //! This is spike code: outside the Cargo workspace, and nothing in `crates/`
