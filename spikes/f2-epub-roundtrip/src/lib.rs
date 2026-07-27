@@ -21,6 +21,7 @@
 pub mod archive;
 pub mod classify;
 pub mod error;
+pub mod family;
 pub mod fixtures;
 pub mod manifest;
 pub mod normalization;

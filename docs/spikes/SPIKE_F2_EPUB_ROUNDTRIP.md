@@ -9,10 +9,10 @@ SPDX-License-Identifier: Apache-2.0
 |---|---|
 | Document | `SPIKE_F2_EPUB_ROUNDTRIP.md` |
 | Spike ID | F2 |
-| Status | **Screening result returned on synthetic input. Disqualifying. Corpus run still outstanding.** |
-| Version | 0.1.0 |
+| Status | **Screening result returned on synthetic input. ADR-F011 reversed in spec 0.12.0 on this evidence.** |
+| Version | 0.2.0 |
 | Date | 2026-07-27 |
-| Depends on | `FUTHARK_PROGRAM_SPEC.md` 0.10.0 — §10, R5, ADR-F011, ADR-F012, ADR-F036, ADR-F041, ADR-F047 |
+| Depends on | `FUTHARK_PROGRAM_SPEC.md` 0.12.0 — §10, R5, ADR-F012, ADR-F036, ADR-F041, ADR-F047, ADR-F048, ADR-F050 |
 | Harness | `spikes/f2-epub-roundtrip/` |
 | Raw results | `f2-manifest.json`, regenerated per run |
 
@@ -38,8 +38,21 @@ useful direction: a failure on easy input is decisive, because the wild
 population is harder. The corpus here is easier still than a normalized one —
 minimal, valid, machine-generated EPUB 3.
 
-**ADR-F011 is not resolved by this document.** The evidence points one way and
-§6 recommends, but recording the decision is the human's.
+### 2.1 A note on how this document was read
+
+Version 0.1.0 said "ADR-F011 is not resolved by this document" in §2 and opened
+§6 with the imperative "Reverse ADR-F011". Spec 0.12.0 closed the ADR, citing
+this spike.
+
+That is not a misreading. A section headed **Recommendation** beginning with an
+imperative *is* a conclusion, whatever a caveat three sections earlier says, and
+splitting the two across a document is how the caveat gets lost. It is the same
+"probable → established" slide this project has been watching for at the
+measurement layer, occurring one layer up, in the prose.
+
+The spec now records the ADR as **Reversed — on synthetic evidence**, with the
+gap visible. §6 below no longer separates the recommendation from what it rests
+on.
 
 ## 3. What `rbook` does to an untouched file
 
@@ -98,9 +111,9 @@ point little of `rbook` remains.
 ## 4. What this run does *not* establish
 
 - **Nothing about real books.** Twelve synthetic containers from one producer.
-  The classifier's own gate says so: 1 distinct un-normalized producer against a
-  floor of 5, and the verdict machinery would have reported `INCONCLUSIVE` had
-  the run come back clean. It came back disqualifying instead, which is the one
+  The classifier's own gate says so: one producer family against a floor of
+  eight, and the verdict machinery would have reported `INCONCLUSIVE` had the run
+  come back clean. It came back disqualifying instead, which is the one
   direction a weak corpus can still support (ADR-F047).
 - **Nothing about a `quick-xml` build.** F2's question names an alternative that
   has not been built. What this run establishes is that the *default* starting
@@ -125,34 +138,68 @@ entirely and left the genuine divergence behind. The standing review question
 applies to red results as readily as green ones: *what else could produce this
 exact signal?* Here, an invalid corpus could.
 
-## 6. Recommendation
+## 6. What this supports, and on what
 
-**Reverse ADR-F011.** Build `futhark-epub` bespoke over `quick-xml` + `zip`,
-with a read path that retains the original bytes of every entry and writes
-untouched entries back verbatim.
+**Claim:** `rbook`'s architecture cannot satisfy ADR-F012, so `futhark-epub`
+should be bespoke over `quick-xml` + `zip`, with a read path that retains the
+original bytes of every entry and writes untouched entries back verbatim
+(ADR-F048).
 
-Two supporting points, both about cost rather than principle:
+**Evidence:** twelve synthetic containers, zero real books. Every one diverged,
+and the mechanism is visible in the diff rather than inferred from the count.
 
-- The failure is structural, so the usual escape — wrap it, patch it, upstream a
-  fix — does not apply. Byte preservation has to be designed into the read path.
-- R5 priced this at "adds a phase". That estimate stands; nothing here makes it
-  larger, and the classifier built for F2 is directly reusable as the conformance
-  check for the bespoke writer.
+**Why the thin evidence still carries the claim:** the finding is architectural.
+`rbook` builds a model and serialises from it, so the original bytes are gone
+before any writer runs. That is a property of the design, observable in one file,
+and a larger corpus would restate it rather than strengthen it. The screening
+asymmetry (ADR-F047) points the same way — a failure on the easy population is
+the informative direction.
 
-**Confirm on real files before recording the decision.** The run that matters is
-the same command against a corpus of real EPUBs — which needs no new code, only
-the files. Given the mechanism (timestamps injected at save time), the outcome is
-not in much doubt, but "not in much doubt" and "measured" are different claims,
-and the retraction earlier in this project came from treating one as the other.
+**Where it could still be wrong:** if some `rbook` API preserves entries the
+`write()`/`save()` path does not, the claim is about that path rather than the
+crate. Nothing in the crate's surface suggests one, and the timestamp injection
+would survive it regardless.
 
-## 7. Reproducing
+Two notes on cost, since they bear on the decision rather than the evidence:
+
+- The usual escapes — wrap it, patch it, upstream a fix — do not apply to a
+  design property. Byte retention has to be in the read path from the start.
+- R5 priced this at "adds a phase". That estimate stands, and the classifier
+  built for F2 is directly reusable as the bespoke writer's conformance check.
+
+## 7. What replaces the confirmation run
+
+Version 0.1.0 recommended re-running against real books to move the conclusion
+from inferred to measured. That was the right instinct pointed at the wrong
+target: **`rbook` is no longer the subject.** Confirming a library that will not
+be used is low-value work.
+
+The question worth the same command is **F2b**: *what infoset and container
+features do real EPUBs actually contain that `futhark-epub` must preserve?*
+Comments, processing instructions, attribute ordering, exotic namespaces, zip
+structure quirks, EPUB 2 survivals. The deliverable is a requirements list for
+the build — and it confirms the reversal as a side effect, which is the part of
+the old recommendation worth keeping.
+
+Its answer is needed in Phase 6 regardless of what happens to ADR-F011, which is
+what makes it the durable version of the run.
+
+The coverage gate has shifted purpose along with it. It no longer adjudicates
+`rbook`; it validates `futhark-epub` once built — which makes the bar more
+important, not less. D12 set it at **≥8 distinct producer families, no family
+above 40%** of the un-normalized population, counted by family rather than by
+string (ADR-F050) because "InDesign 17" and "InDesign 19" are one toolchain. The
+verdict names the families it counted, so coverage can be argued with rather than
+trusted to a threshold.
+
+## 8. Reproducing
 
 ```bash
 cd spikes/f2-epub-roundtrip
 cargo test                                   # instrument self-validation
 cargo run --example emit_fixtures -- /tmp/f2 # synthetic containers
 cargo run -- roundtrip /tmp/f2 --tier=a      # this result
-cargo run -- roundtrip ~/Books               # the run that matters
+cargo run -- roundtrip ~/Books               # F2b: characterise the wild population
 cargo run --example rt_one -- <file.epub>    # before/after, for diagnosis
 ```
 

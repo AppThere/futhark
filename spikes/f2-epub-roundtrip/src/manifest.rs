@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::family;
 use crate::taxonomy::{CLASSIFIER_VERSION, Class, Divergence, Group, TAXONOMY_FROZEN};
 
 /// One book's result.
@@ -129,6 +130,7 @@ impl Manifest {
             .collect();
         let mut producers: BTreeMap<String, usize> = BTreeMap::new();
         let mut unnormalized_producers: BTreeMap<String, usize> = BTreeMap::new();
+        let mut unnormalized_families: BTreeMap<String, usize> = BTreeMap::new();
         let mut signals: BTreeMap<String, usize> = BTreeMap::new();
 
         for r in &self.records {
@@ -145,6 +147,11 @@ impl Manifest {
                     *signals.entry(sig.clone()).or_insert(0) += 1;
                 }
             } else {
+                // Families, not strings (ADR-F050). Two InDesign releases are
+                // one toolchain, and counting them as two overstates coverage.
+                *unnormalized_families
+                    .entry(family::classify(r.producer.as_deref()))
+                    .or_insert(0) += 1;
                 *unnormalized_producers.entry(p).or_insert(0) += 1;
             }
         }
@@ -172,9 +179,12 @@ impl Manifest {
             // The number D12's gate actually reads. Producer strings on
             // rewritten files name the manager, not the original toolchain.
             distinct_unnormalized_producers: unnormalized_producers.len(),
+            distinct_unnormalized_families: unnormalized_families.len(),
+            largest_family_share_pct: family::largest_share_pct(&unnormalized_families),
             by_class,
             producers,
             unnormalized_producers,
+            unnormalized_families,
             normalization_signals: signals,
         }
     }
@@ -204,15 +214,26 @@ pub struct Summary {
     pub distinct_producers: usize,
     /// Files carrying at least one normalization signal.
     pub normalized: usize,
-    /// Distinct producers among files with *no* normalization signal. **This is
-    /// the number D12's coverage gate reads** (ADR-F046).
+    /// Distinct producer *strings* among un-normalized files. Reported for
+    /// transparency; the gate does not read it (ADR-F050).
     pub distinct_unnormalized_producers: usize,
+    /// Distinct producer *families* among un-normalized files. **This is what
+    /// D12's coverage gate reads** (ADR-F050).
+    pub distinct_unnormalized_families: usize,
+    /// Share of the largest family, as a percentage of the un-normalized
+    /// population. A count cannot distinguish twenty families where one holds
+    /// 95% from six held evenly; this is the half that can.
+    pub largest_family_share_pct: f64,
     /// Occurrences per class, every class present.
     pub by_class: BTreeMap<String, usize>,
     /// Books per producer, all files.
     pub producers: BTreeMap<String, usize>,
-    /// Books per producer, un-normalized files only.
+    /// Books per producer string, un-normalized files only.
     pub unnormalized_producers: BTreeMap<String, usize>,
+    /// Books per producer family, un-normalized files only. The gate's input,
+    /// and named in the verdict so coverage can be argued with rather than
+    /// trusted to a threshold.
+    pub unnormalized_families: BTreeMap<String, usize>,
     /// How often each normalization signal fired.
     pub normalization_signals: BTreeMap<String, usize>,
 }
@@ -225,7 +246,8 @@ impl Summary {
             "books: {}  lossless: {} ({:.2}%)  entry-content failures: {}\n\
              container-only divergence: {}\n\
              normalized (rewritten by a manager): {} of {}\n\
-             distinct producers: {} overall, {} among un-normalized files\n\n",
+             producers: {} strings overall, {} among un-normalized files\n\
+             families among un-normalized files: {} (largest holds {:.0}%)\n\n",
             self.total,
             self.lossless,
             self.lossless_pct,
@@ -235,6 +257,8 @@ impl Summary {
             self.total,
             self.distinct_producers,
             self.distinct_unnormalized_producers,
+            self.distinct_unnormalized_families,
+            self.largest_family_share_pct,
         ));
         if self.normalized > 0 {
             s.push_str(
@@ -260,7 +284,11 @@ impl Summary {
         for (p, n) in &self.producers {
             s.push_str(&format!("  {n:>4}  {p}\n"));
         }
-        s.push_str("\nproducers among un-normalized files — D12's gate reads this:\n");
+        s.push_str("\nproducer families among un-normalized files — the gate reads this:\n");
+        for (f, n) in &self.unnormalized_families {
+            s.push_str(&format!("  {n:>4}  {f}\n"));
+        }
+        s.push_str("\nraw producer strings among un-normalized files:\n");
         if self.unnormalized_producers.is_empty() {
             s.push_str(
                 "  (none — every file shows normalization evidence, so this\n\

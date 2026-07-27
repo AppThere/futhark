@@ -16,7 +16,8 @@ Findings in
 It injects `dc:date` and `dcterms:modified` stamped with the current clock into
 files nothing edited, so consecutive saves of an untouched book differ from each
 other. That is structural — it parses to a model and serialises from it — not a
-bug to wrap around. The corpus run against real files is still outstanding.
+bug to wrap around. ADR-F011 is reversed in spec 0.12.0 on that evidence, which
+is twelve synthetic containers and zero real books; the ADR records the gap.
 
 ## Running it
 
@@ -35,8 +36,15 @@ result on a normalized or narrow corpus is `INCONCLUSIVE`, not success: a
 manager's writer strips exactly the constructs that break parsers, so such a
 corpus screens the easy population. Only `QUALIFYING` — clean *and* diverse —
 supports adoption, and `tests/verdict.rs` enforces that a screening pass can
-never reach it. The exit status follows whether ADR-F011 was resolved, not
-whether anything failed.
+never reach it. The exit status follows whether the run resolved the question,
+not whether anything failed.
+
+The coverage gate counts producer **families**, not strings (ADR-F050) —
+"InDesign 17" and "InDesign 19" are one toolchain, and a string count is the R27
+shape one level up. D12 set it at ≥8 families with no family above 40% of the
+un-normalized population, because twenty families where one holds 95% is a worse
+corpus than six held evenly and a count cannot tell them apart. The verdict
+**names the families it counted**, so coverage can be argued with.
 
 `scan` is the Tier B entry point and writes `f2-manifest.json`. It records
 hashes, producer strings, normalization signals, EPUB versions, and divergence
@@ -113,9 +121,11 @@ extra one over-classification.
 
 ## What comes next
 
-1. **Run `roundtrip` against real files.** No new code needed — only the books.
-   Given the mechanism, the outcome is not in much doubt, but "not in much doubt"
-   and "measured" are different claims.
+1. **F2b — characterise the wild population.** Same command, different question:
+   not "does rbook fail" (settled, and rbook is no longer the subject) but *what
+   must `futhark-epub` preserve?* Comments, processing instructions, attribute
+   ordering, exotic namespaces, zip quirks. The deliverable is a requirements
+   list for the build, needed in Phase 6 whatever happens to ADR-F011.
 2. **Tier A acquisition** — local, not an agent task. Agent environments reach
    `index.crates.io` only; Gutenberg, Standard Ebooks, and GitHub are
    proxy-denied (D7).
@@ -131,6 +141,7 @@ extra one over-classification.
 | `src/archive.rs` | Reads a container into a comparable model, storage metadata included. |
 | `src/xmlcmp.rs` | Infoset comparison, for telling canonicalisation from content loss. |
 | `src/producer.rs` | Producer string and OPF facts. |
+| `src/family.rs` | ADR-F050: producer families, not strings. Unrecognised producers get their own family rather than being merged. |
 | `src/normalization.rs` | R27: was this file rewritten by a manager? Detected without the producer string. |
 | `src/manifest.rs` | The publishable artifact (ADR-F038). Carries no book bytes. |
 | `src/fixtures.rs` | One known class per fixture. How the instrument is validated. |

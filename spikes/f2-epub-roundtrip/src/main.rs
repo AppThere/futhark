@@ -7,7 +7,7 @@
 //! futhark-f2 self-test                  validate the instrument against fixtures
 //! futhark-f2 compare <a.epub> <b.epub>  classify one round-trip pair
 //! futhark-f2 scan <dir> --tier=b        manifest every .epub under a directory
-//! futhark-f2 roundtrip <dir> [--tier=a] [--min-producers=N]
+//! futhark-f2 roundtrip <dir> [--tier=a] [--min-families=N]
 //! ```
 //!
 //! `roundtrip` is the spike proper: open each book with rbook, write it back
@@ -232,7 +232,7 @@ fn scan(args: &[String]) -> Result<bool> {
 fn roundtrip_corpus(args: &[String]) -> Result<bool> {
     let dir = args
         .get(1)
-        .ok_or_else(|| F2Error::Usage("roundtrip <dir> [--tier=a] [--min-producers=N]".into()))?;
+        .ok_or_else(|| F2Error::Usage("roundtrip <dir> [--tier=a] [--min-families=N]".into()))?;
     let tier = if args.iter().any(|a| a == "--tier=a") {
         Tier::A
     } else {
@@ -240,9 +240,9 @@ fn roundtrip_corpus(args: &[String]) -> Result<bool> {
     };
     let floor = args
         .iter()
-        .find_map(|a| a.strip_prefix("--min-producers="))
+        .find_map(|a| a.strip_prefix("--min-families="))
         .and_then(|v| v.parse().ok())
-        .unwrap_or(verdict::PROVISIONAL_PRODUCER_FLOOR);
+        .unwrap_or(verdict::FAMILY_FLOOR);
 
     let work = std::env::temp_dir().join("futhark-f2-roundtrip");
     std::fs::create_dir_all(&work).map_err(|e| F2Error::Io {

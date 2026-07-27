@@ -28,17 +28,37 @@ use crate::manifest::Summary;
 /// F2's pass criterion: entry-content divergence ≥99% clean (spec §10).
 pub const LOSSLESS_THRESHOLD_PCT: f64 = 99.0;
 
-/// How many distinct un-normalized producers a corpus needs before a clean run
-/// counts as qualifying rather than screening.
+/// Distinct producer *families* a corpus needs before a clean run qualifies.
 ///
-/// **Provisional — not a resolved decision.** D12 settled that the gate is
-/// coverage rather than file count, but did not set the number. This is a
-/// placeholder so the tool has a defined behaviour; override with
-/// `--min-producers` and record the real figure in the spec when it is chosen.
-pub const PROVISIONAL_PRODUCER_FLOOR: usize = 5;
+/// Set by D12 at 0.12.0: the wild population runs to roughly ten or twelve
+/// families, and eight is defensible coverage of it. Chosen for what makes the
+/// result meaningful rather than for what any particular library contains — a
+/// corpus that cannot clear the bar produces [`Verdict::Inconclusive`], which
+/// is the gate working rather than failing.
+pub const FAMILY_FLOOR: usize = 8;
+
+/// No single family may exceed this share of the un-normalized population.
+///
+/// The second half of the gate, and the reason a bare count was the wrong
+/// instrument: twenty families where one holds 95% is a worse corpus than six
+/// held evenly, and a count cannot tell them apart.
+pub const MAX_FAMILY_SHARE_PCT: f64 = 40.0;
+
+/// Which half of the coverage gate a corpus failed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Shortfall {
+    /// Too few distinct families.
+    TooFewFamilies,
+    /// Enough families, but one dominates the population.
+    TooConcentrated,
+}
 
 /// What a run supports concluding. Deliberately lacks a plain `Pass`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// `Eq` is not derived: a share percentage is a float. Comparisons in tests go
+/// through `matches!` on the variant, which is the property that matters.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case", tag = "verdict")]
 pub enum Verdict {
     /// Entry-content divergence exceeded the threshold. Decisive on any corpus:
@@ -50,23 +70,28 @@ pub enum Verdict {
         /// Books examined.
         total: usize,
     },
-    /// Clean, but on a corpus too normalized or too narrow to support adoption.
-    /// **Not a pass.** ADR-F011 stays open.
+    /// Clean, but on a corpus too normalized, too narrow, or too concentrated
+    /// to support adoption. **Not a pass.**
     Inconclusive {
-        /// Distinct producers among un-normalized files.
-        unnormalized_producers: usize,
-        /// What that count would have to reach.
-        floor: usize,
+        /// Why the corpus fell short.
+        reason: Shortfall,
+        /// Families found, named. A threshold can be trusted or not; a named
+        /// list can be argued with, which is the point (ADR-F050).
+        families: Vec<String>,
+        /// Share held by the largest family.
+        largest_family_share_pct: f64,
         /// Files showing normalization evidence.
         normalized: usize,
         /// Books examined.
         total: usize,
     },
-    /// Clean, on a corpus with genuine producer diversity. This is the only
-    /// result that supports confirming ADR-F011.
+    /// Clean, on a corpus with genuine family diversity. The only result that
+    /// supports confirming a reader.
     Qualifying {
-        /// Distinct producers among un-normalized files.
-        unnormalized_producers: usize,
+        /// Families found, named.
+        families: Vec<String>,
+        /// Share held by the largest family.
+        largest_family_share_pct: f64,
         /// Books examined.
         total: usize,
     },
@@ -76,8 +101,8 @@ pub enum Verdict {
 }
 
 impl Verdict {
-    /// Read a summary against ADR-F047's asymmetry.
-    pub fn judge(summary: &Summary, producer_floor: usize) -> Self {
+    /// Read a summary against ADR-F047's asymmetry and D12's coverage gate.
+    pub fn judge(summary: &Summary, family_floor: usize) -> Self {
         if summary.total == 0 {
             return Self::NothingMeasured;
         }
@@ -87,17 +112,29 @@ impl Verdict {
                 total: summary.total,
             };
         }
-        if summary.distinct_unnormalized_producers < producer_floor {
-            return Self::Inconclusive {
-                unnormalized_producers: summary.distinct_unnormalized_producers,
-                floor: producer_floor,
+
+        let families: Vec<String> = summary.unnormalized_families.keys().cloned().collect();
+        let shortfall = if summary.distinct_unnormalized_families < family_floor {
+            Some(Shortfall::TooFewFamilies)
+        } else if summary.largest_family_share_pct > MAX_FAMILY_SHARE_PCT {
+            Some(Shortfall::TooConcentrated)
+        } else {
+            None
+        };
+
+        match shortfall {
+            Some(reason) => Self::Inconclusive {
+                reason,
+                families,
+                largest_family_share_pct: summary.largest_family_share_pct,
                 normalized: summary.normalized,
                 total: summary.total,
-            };
-        }
-        Self::Qualifying {
-            unnormalized_producers: summary.distinct_unnormalized_producers,
-            total: summary.total,
+            },
+            None => Self::Qualifying {
+                families,
+                largest_family_share_pct: summary.largest_family_share_pct,
+                total: summary.total,
+            },
         }
     }
 
@@ -122,27 +159,49 @@ impl Verdict {
                  rbook; futhark-epub becomes a bespoke build over quick-xml.",
             ),
             Self::Inconclusive {
-                unnormalized_producers,
-                floor,
+                reason,
+                families,
+                largest_family_share_pct,
                 normalized,
                 total,
-            } => format!(
-                "INCONCLUSIVE — no entry-content divergence, but this corpus cannot\n\
-                 support adoption. {normalized} of {total} files show normalization\n\
-                 evidence, leaving {unnormalized_producers} distinct un-normalized\n\
-                 producer(s) against a floor of {floor}.\n\n\
-                 A manager's writer strips exactly what breaks parsers, so this run\n\
-                 screened the easy population and found nothing. That is not the\n\
-                 same as passing (ADR-F047). ADR-F011 stays open pending a corpus\n\
-                 with real producer diversity.",
-            ),
+            } => {
+                let why = match reason {
+                    Shortfall::TooFewFamilies => format!(
+                        "{} distinct producer families, against a floor of {FAMILY_FLOOR}",
+                        families.len()
+                    ),
+                    Shortfall::TooConcentrated => format!(
+                        "{} families, but the largest holds {largest_family_share_pct:.0}% \
+                         against a ceiling of {MAX_FAMILY_SHARE_PCT:.0}%",
+                        families.len()
+                    ),
+                };
+                format!(
+                    "INCONCLUSIVE — no entry-content divergence, but this corpus cannot\n\
+                     support adoption: {why}.\n\
+                     {normalized} of {total} files show normalization evidence.\n\n\
+                     families counted: {}\n\n\
+                     A manager's writer strips exactly what breaks parsers, so this run\n\
+                     screened the easy population and found nothing. That is not the\n\
+                     same as passing (ADR-F047).",
+                    if families.is_empty() {
+                        "(none)".to_owned()
+                    } else {
+                        families.join(", ")
+                    },
+                )
+            }
             Self::Qualifying {
-                unnormalized_producers,
+                families,
+                largest_family_share_pct,
                 total,
             } => format!(
                 "QUALIFYING — no entry-content divergence across {total} books from\n\
-                 {unnormalized_producers} distinct un-normalized producers. This\n\
-                 result can support confirming ADR-F011.",
+                 {} producer families, largest holding {largest_family_share_pct:.0}%.\n\n\
+                 families counted: {}\n\n\
+                 This result can support confirming the reader under test.",
+                families.len(),
+                families.join(", "),
             ),
             Self::NothingMeasured => {
                 "NOTHING MEASURED — the corpus was empty. This is not a pass; \

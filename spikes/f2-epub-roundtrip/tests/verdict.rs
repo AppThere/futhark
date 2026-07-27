@@ -10,8 +10,11 @@
 
 use futhark_f2::manifest::{Manifest, Record, Tier};
 use futhark_f2::taxonomy::{Class, Divergence};
-use futhark_f2::verdict::{PROVISIONAL_PRODUCER_FLOOR, Verdict};
+use futhark_f2::verdict::{FAMILY_FLOOR, Shortfall, Verdict};
 
+/// Distinct *families*, not strings — `publisher-0` and `publisher-1` are two
+/// families only because neither matches a known toolchain, which is the
+/// fallback behaving as intended (ADR-F050).
 fn record(producer: &str, normalized: bool, divergences: Vec<Divergence>) -> Record {
     Record {
         source_hash: format!("hash-{producer}-{normalized}"),
@@ -45,7 +48,7 @@ fn a_clean_run_on_a_normalized_corpus_is_not_a_pass() {
             .map(|i| record(&format!("calibre {i}"), true, Vec::new()))
             .collect(),
     );
-    let v = Verdict::judge(&m.summary(), PROVISIONAL_PRODUCER_FLOOR);
+    let v = Verdict::judge(&m.summary(), FAMILY_FLOOR);
 
     assert!(matches!(v, Verdict::Inconclusive { .. }), "{v:?}");
     assert!(
@@ -72,7 +75,7 @@ fn failure_is_decisive_even_on_a_normalized_corpus() {
             "differs",
         )],
     ));
-    let v = Verdict::judge(&manifest_of(records).summary(), PROVISIONAL_PRODUCER_FLOOR);
+    let v = Verdict::judge(&manifest_of(records).summary(), FAMILY_FLOOR);
 
     assert!(matches!(v, Verdict::Disqualifying { .. }), "{v:?}");
     assert!(
@@ -83,12 +86,13 @@ fn failure_is_decisive_even_on_a_normalized_corpus() {
 
 #[test]
 fn a_diverse_un_normalized_corpus_can_qualify() {
+    // Eight families, evenly held: clears both halves of the gate.
     let m = manifest_of(
         (0..8)
             .map(|i| record(&format!("publisher-{i}"), false, Vec::new()))
             .collect(),
     );
-    let v = Verdict::judge(&m.summary(), PROVISIONAL_PRODUCER_FLOOR);
+    let v = Verdict::judge(&m.summary(), FAMILY_FLOOR);
 
     assert!(matches!(v, Verdict::Qualifying { .. }), "{v:?}");
     assert!(v.supports_adoption());
@@ -109,22 +113,69 @@ fn container_level_divergence_alone_still_qualifies() {
             .collect(),
     );
     assert!(matches!(
-        Verdict::judge(&m.summary(), PROVISIONAL_PRODUCER_FLOOR),
+        Verdict::judge(&m.summary(), FAMILY_FLOOR),
         Verdict::Qualifying { .. }
     ));
 }
 
 #[test]
 fn an_empty_corpus_is_not_a_pass() {
-    let v = Verdict::judge(
-        &manifest_of(Vec::new()).summary(),
-        PROVISIONAL_PRODUCER_FLOOR,
-    );
-    assert_eq!(v, Verdict::NothingMeasured);
+    let v = Verdict::judge(&manifest_of(Vec::new()).summary(), FAMILY_FLOOR);
+    assert!(matches!(v, Verdict::NothingMeasured), "{v:?}");
     assert!(
         !v.supports_adoption(),
         "zero failures out of zero books is the emptiest version of the standing review question",
     );
+}
+
+#[test]
+fn enough_families_but_one_dominates_is_still_inconclusive() {
+    // Nine families and no shortage of them — but one holds 92%, which is the
+    // corpus a bare count cannot tell from a healthy one.
+    let mut records: Vec<Record> = (0..100)
+        .map(|_| record("Vellum", false, Vec::new()))
+        .collect();
+    for i in 0..8 {
+        records.push(record(&format!("publisher-{i}"), false, Vec::new()));
+    }
+    let s = manifest_of(records).summary();
+    assert!(
+        s.distinct_unnormalized_families >= FAMILY_FLOOR,
+        "families: {}",
+        s.distinct_unnormalized_families
+    );
+    let v = Verdict::judge(&s, FAMILY_FLOOR);
+    assert!(
+        matches!(
+            v,
+            Verdict::Inconclusive {
+                reason: Shortfall::TooConcentrated,
+                ..
+            }
+        ),
+        "{v:?}"
+    );
+    assert!(!v.supports_adoption());
+}
+
+#[test]
+fn producer_versions_collapse_into_one_family() {
+    // The ADR-F050 case: many strings, one toolchain.
+    let m = manifest_of(
+        (14..30)
+            .map(|i| record(&format!("Adobe InDesign {i}.0"), false, Vec::new()))
+            .collect(),
+    );
+    let s = m.summary();
+    assert_eq!(
+        s.distinct_unnormalized_producers, 16,
+        "strings, the misleading count"
+    );
+    assert_eq!(
+        s.distinct_unnormalized_families, 1,
+        "families, the count that means something"
+    );
+    assert!(!Verdict::judge(&s, FAMILY_FLOOR).supports_adoption());
 }
 
 #[test]
@@ -139,8 +190,8 @@ fn many_producers_but_all_normalized_still_fails_the_gate() {
     let s = m.summary();
     assert_eq!(s.distinct_producers, 20, "the misleading number");
     assert_eq!(
-        s.distinct_unnormalized_producers, 0,
+        s.distinct_unnormalized_families, 0,
         "the number that counts"
     );
-    assert!(!Verdict::judge(&s, PROVISIONAL_PRODUCER_FLOOR).supports_adoption());
+    assert!(!Verdict::judge(&s, FAMILY_FLOOR).supports_adoption());
 }
