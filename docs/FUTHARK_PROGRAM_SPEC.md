@@ -10,7 +10,7 @@ SPDX-License-Identifier: Apache-2.0
 | Document | `FUTHARK_PROGRAM_SPEC.md` |
 | Spec ID | 00 |
 | Status | **Draft — pending open decisions in §12** |
-| Version | 0.4.0 |
+| Version | 0.5.0 |
 | Date | 2026-07-27 |
 | Supersedes | — |
 | Depends on | `LOKI_*` specs (document model precedent), `APPTHERE_CLOUD_*` (sync substrate) |
@@ -483,15 +483,15 @@ Hot/Warm/Cold policy Loki uses in `loki-render-cache`. Never base64 over IPC.
 | **ADR-F004** | Document Model IR is a thin normalization layer — spine, resource map, ToC, metadata — over format-native content, not a universal document model. Content stays in its native form as far down as possible. | Accepted |
 | **ADR-F005** | Book content renders in a sandboxed iframe on a distinct custom-scheme origin with no IPC binding. | Accepted |
 | **ADR-F006** | EPUB scripted content is stripped at ingest by default. A per-book opt-in exists but remains sandboxed and network-denied. Futhark is a reader, not a browser. | Accepted |
-| **ADR-F007** | Book resources are served via a registered async URI scheme, never inlined into the DOM or passed over IPC. | Accepted |
+| **ADR-F007** | Book resources are served via a registered async URI scheme, never inlined into the DOM or passed over IPC. **The paginator ships from the resource server as part of the served document** — an opaque-origin frame exposes no `contentDocument` for the app origin to inject into (Spike F1). | Accepted |
 | **ADR-F008** | PDF tiles are WebP over a custom scheme, not base64 over IPC. | Accepted |
 | **ADR-F009** | `hayro` for all PDF parsing and rasterization. No PDFium, no MuPDF, no C dependency. | Accepted |
 | **ADR-F010** | `futhark-mobi` is bespoke safe Rust, bidirectional (read and write). No `libmobi` FFI. | Accepted |
 | **ADR-F011** | EPUB reader/writer starts from `rbook`; adoption confirmed or reversed by Spike F2 on round-trip fidelity. | Provisional |
 | **ADR-F012** | Editor saves must be byte-lossless for untouched files. Comments, attribute order, whitespace, and unknown elements are preserved. | Accepted |
-| **ADR-F013** | Paginated reflow uses CSS multi-column inside the content iframe, with scroll-offset paging. | Provisional — gated on Spike F1 |
+| **ADR-F013** | Paginated reflow uses CSS multi-column inside the content iframe, with scroll-offset paging. **Exception: `writing-mode: vertical-rl` is not paginable this way** and falls back to scroll mode (ADR-F034). | **Accepted** — Spike F1 returned |
 | **ADR-F014** | Reading position is stored as EPUB CFI where available, with a text-anchored fallback (prefix/suffix quote matching) for MOBI and malformed EPUBs. | Accepted |
-| **ADR-F015** | Annotations anchor on the same locator scheme as position, and re-anchor by quote matching when the underlying document changes. | Accepted |
+| **ADR-F015** | Annotations anchor on the same locator scheme as position, and re-anchor by quote matching when the underlying document changes. **Annotation text is always taken from `Range.toString()`, never `Selection.toString()`** — they diverge across table boundaries on both engine families (Spike F1), which would silently break re-anchoring. | Accepted |
 | **ADR-F016** | SQLite via `sqlx` for the catalog. Blobs (covers, extracted resources) live on the filesystem, referenced by content hash. Not in the database. | Accepted |
 | **ADR-F017** | Books are referenced in place by default. Futhark does not restructure the user's folders unless "managed library" is explicitly enabled. | Accepted |
 | **ADR-F018** | Sync (Sync) replicates annotations, bookmarks, and reading position only — never document bytes. Loro CRDT over the AppThere Cloud relay, reusing Loki's transport. | Accepted |
@@ -510,6 +510,8 @@ Hot/Warm/Cold policy Loki uses in `loki-render-cache`. Never base64 over IPC.
 | **ADR-F031** | Export ships on all five platforms at parity. `futhark-convert` contains no platform-conditional code; one implementation, one conformance suite, no feature flags. | Accepted |
 | **ADR-F032** | File delivery is abstracted behind a `DeliverTarget` trait with two implementations: native save dialog on desktop, and `appthere-file-access` plus share-sheet handoff on mobile. The compiler never touches a path. | Accepted |
 | **ADR-F033** | `loki-file-access` is promoted to `appthere-file-access` rather than vendored or forked, following the `loki-acid` → `appthere-conformance` and `appthere-canvas` precedents. Futhark is its second consumer, which is the justification for promotion. | Provisional — see D11 |
+| **ADR-F034** | Vertical writing modes are detected at ingest and rendered in **scroll mode, never paginated**. Detection is content-based, not language-based: the horizontal-CJK control in Spike F1 paginates cleanly on both engines, so this is a writing-mode constraint and must not be applied to CJK generally. | Accepted |
+| **ADR-F035** | Reading progress is reported in **device-independent locators**, not page numbers. Page numbers are per-device and explicitly labelled as such in the UI. Spike F1 measured 2.99% mean page-count divergence between engine families (6.45% max), which is tolerable for display and unacceptable as an anchor. | Accepted |
 
 ---
 
@@ -517,7 +519,7 @@ Hot/Warm/Cold policy Loki uses in `loki-render-cache`. Never base64 over IPC.
 
 | ID | Risk | Sev | Likelihood | Mitigation |
 |---|---|---|---|---|
-| **R1** | CSS multicol pagination behaves inconsistently or unstably across WKWebView / WebView2 / WebKitGTK, breaking position stability. | **Critical** | Medium | Spike F1 before any other work. Gates ADR-F001 and ADR-F013. |
+| **R1** | ~~CSS multicol pagination unstable across engines.~~ **Largely retired by Spike F1**: page counts 100% deterministic per settings tuple across 192 doc/tuple pairs × 3 loads on both engine families; position preserved on 100% of resize and font-change samples; selection usable in every case including drags across a column boundary. | Low | Low | Residual risk is WKWebView, which F1 could not exercise. See R21 and Spike F1b. |
 | **R2** | Hostile EPUB escapes the content sandbox and reaches the Rust backend. | **Critical** | Low | ADR-F005/F006/F007. External security review before public release. Threat model as a Spec 01 deliverable. |
 | **R3** | Users expect Kindle-library support and find Futhark opens none of their purchased KFX books. Dropping KFX removes the code risk, not the expectation. | High | **High** | Product copy states the Kindle story as "export to your Kindle", never "read your Kindle library". Surface a clear, non-apologetic message on encountering KFX. |
 | **R4** | `futhark-mobi` KF8 parsing is a larger effort than estimated; MOBI slips out of v1. | High | Medium | Phase-gate it. MOBI is Phase 4, not Phase 1. Ship EPUB-only if needed. |
@@ -529,12 +531,14 @@ Hot/Warm/Cold policy Loki uses in `loki-render-cache`. Never base64 over IPC.
 | **R10** | Text selection across a multicol-paginated iframe is unreliable, breaking highlights. | High | Medium | Fold into Spike F1 acceptance criteria — selection is not a separate concern from pagination. |
 | **R11** | Library-wide full-text search over 10k books needs an index Futhark has no story for. | Medium | Medium | Deferred to Phase 5. Evaluate `tantivy` then. |
 | **R12** | iOS App Store rejection: readers that reach external stores trigger IAP rules; sideloading affordances may draw scrutiny. | Medium | Low | No purchase paths in v1 (§1.2). Export is local-file-out only, no store interaction. |
-| **R13** | Vertical writing modes and ruby render acceptably on WebKit but poorly on WebView2, fragmenting CJK support. | Medium | Medium | Add CJK titles to the conformance corpus from Phase 1, not as an afterthought. |
+| **R13** | `writing-mode: vertical-rl` is **not paginable via multicol at all**. Spike F1 measured WebKitGTK 2.50 reporting a single page while stranding ~80% of the chapter past the last reachable scroll position — **silent content loss**, not degraded rendering. A horizontal-CJK control with identical text paginates cleanly on both engines, isolating this to the writing mode rather than the script. | **High** | Confirmed | ADR-F034: detect at ingest, force scroll mode. Never paginate vertical text. Vertical and horizontal CJK both stay in the conformance corpus from Phase 1 so the distinction cannot regress into a blanket CJK exclusion. |
 | **R14** | Annotation re-anchoring fails after a user edits a book they have annotated — a workflow only Futhark creates, by shipping reader and editor together. | Medium | **High** | Design for it explicitly in Annotations. Quote-based fallback (ADR-F015) plus a visible "orphaned annotation" state rather than silent loss. |
 | **R15** | Amazon further restricts sideloading, or drops AZW3 support on new devices, stranding the KF8 export path. Send-to-Kindle was already cut for unsupported Kindles in April 2026 and older formats are being phased out. | Medium | Medium | Keep EPUB export as the primary Kindle path (Send to Kindle accepts it). KF8 export is an enhancement, never the only route. Monitor device support each Phase gate. |
 | **R16** | KF8 export produces files that appear to work but fail subtly on device — bad ToC, missing cover, mis-sized text records. Failures are silent and only visible on hardware. | High | Medium | ADR-F030 round-trip verification, plus a physical-device test matrix (Paperwhite, Scribe, Kindle app) as a Phase 6 exit criterion. |
 | **R17** | CSS downconversion loses layout fidelity badly enough on complex books that users blame Futhark rather than the format ceiling. | Medium | Medium | ADR-F028 loss report shown before export completes, with a preview diff for the worst-affected sections. |
 | **R18** | Mobile file delivery is harder than desktop parity implies. Tauri's save dialog is still an open enhancement request on both Android and iOS; `open` returns `content://` URIs on Android and `file://` URIs on iOS rather than paths; there is no folder picker on Android and no first-party external-storage permission plugin. | Low | Low | **Largely retired by prior art.** The abandoned Tauri/Lexical Loki Text build already solved Android file I/O, and `loki-file-access` is a working read/write implementation. Futhark consumes it via `appthere-file-access` (D11) rather than rediscovering the problem. Residual risk is iOS coverage and create-new-file flows — see R20. |
+| **R21** | WKWebView is unexercised. Spike F1 covered Blink (proxy for WebView2 and Android System WebView) and WebKitGTK 2.50 (the actual Linux Tauri webview), but not WKWebView — which is **macOS as well as iOS**. macOS is in scope for desktop v1, so this gap is not closed by resolving D2. | **High** | Medium | Spike F1b on the MacBook Air before D1 is finally confirmed. Cheap: the harness already exists and is engine-agnostic. |
+| **R22** | The paginator now executes inside the sandboxed content frame alongside book content (ADR-F007). If ADR-F006 script-stripping is ever bypassed, hostile script shares an execution context with the component reporting pagination state. | Medium | Low | Opaque origin (`allow-scripts` without `allow-same-origin`) means hostile script still cannot reach the app origin or the IPC bridge. Treat paginator output as untrusted input on the Rust side and validate it, rather than trusting reported offsets. |
 | **R20** | `loki-file-access` may not cover what export actually needs: iOS as well as Android, and `ACTION_CREATE_DOCUMENT`-style *create-new-file* flows rather than read/write of files the user already picked. | Medium | Medium | Audit the crate's actual surface before Phase 5 (D11). Gaps are incremental additions to a working crate, not a new bridge from scratch. |
 | **R19** | Compiling a large image-heavy EPUB flattens the spine into a single blob and spikes memory, triggering Android LMK or iOS jetsam mid-export. Export is now a mobile feature, so this is on the critical path. | Medium | Medium | Stream PalmDOC text records to disk incrementally rather than building the whole blob in memory. The exact-4096-byte record constraint makes chunked emission the natural implementation anyway. Reuse Loki's memory-tracking harness. |
 
@@ -546,7 +550,8 @@ All three block Spec 01. None should take more than a week.
 
 | ID | Spike | Question | Pass criteria |
 |---|---|---|---|
-| **F1** | Multicol pagination | Can a sandboxed iframe paginate a real 900-page EPUB via CSS multicol, on all three webview engines, with stable page counts, correct reflow on font-size change, position preservation, and working text selection? | Page count deterministic per settings tuple; position preserved across resize; selection returns usable ranges on all three engines. **Gates ADR-F001.** |
+| ~~**F1**~~ | Multicol pagination | — | **RETURNED. Pass**, on Blink and WebKitGTK, with the `vertical-rl` exception (ADR-F034). ADR-F013 accepted. `docs/spikes/SPIKE_F1_MULTICOL_PAGINATION.md`. |
+| **F1b** | WKWebView coverage | Does the F1 harness produce equivalent results on WKWebView, on macOS? | Same three criteria as F1. **Gates final confirmation of D1.** macOS is in scope for desktop v1, so this is required regardless of how D2 resolves iOS. |
 | **F2** | EPUB round-trip | Does `rbook` (or a `quick-xml` build) round-trip a corpus of 200 real EPUBs byte-identically when nothing is edited? | ≥95% byte-identical; the remainder explainable and non-destructive. |
 | **F3** | PDF on mobile | Can `hayro` render a 300 MB scanned PDF at acceptable pan/zoom latency on the Lenovo LOQ and a mid-range Android device? | First tile <150 ms; sustained pan without visible tile pop at 60 fps target. |
 
@@ -574,7 +579,7 @@ library at the end of Phase 3 without embarrassment. That is a deliberate proper
 
 | ID | Decision | Notes |
 |---|---|---|
-| **D1** | Confirm or reverse ADR-F001 after Spike F1. | Everything downstream depends on this. |
+| **D1** | Confirm or reverse ADR-F001. | **F1's reversal condition did not fire** — multicol pagination works. Remaining input is Spike F1b (WKWebView on macOS, R21). The §6.5 sensitivity condition that could still flip this is D2, not F1. |
 | **D2** | Is iOS in v1, or is it Phase 5+ and possibly later? | This is the largest single input to the D1 sensitivity analysis (§6.5). |
 | **D3** | Managed library vs. reference-in-place as the *default* (ADR-F017). | Calibre chose managed and users resent it; reference-in-place is harder to keep consistent. |
 | **D4** | Does the editor target EPUB 3 only, or EPUB 2 as well? | EPUB 2 editing roughly doubles the validation surface for a shrinking format. |

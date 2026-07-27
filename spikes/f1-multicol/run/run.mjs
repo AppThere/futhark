@@ -3,11 +3,13 @@
 //
 // Spike F1 driver.
 //
-//   node run/run.mjs --engine=chromium,webkitgtk [--repeats=3] [--quick]
+//   node run/run.mjs [--engine=chromium,webkitgtk] [--repeats=3] [--quick] [--tag=]
 //
-// Writes results/<engine>.json and results/summary.json. Engines are plug-in:
-// adding WebView2 or WKWebView later means one more engine-*.mjs exposing the
-// same five methods, and the scenarios are untouched.
+// Engines default by platform: chromium+webkitgtk on Linux, chromium+safaridriver
+// on macOS (Spike F1b, R21). Results land in results/<engine>[-<tag>].json; the
+// tag exists so a run on another machine can sit beside this one rather than
+// overwrite it. Adding WebView2 means one more engine-*.mjs exposing the same
+// five methods — the scenarios never learn which browser they are driving.
 
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -28,8 +30,12 @@ const argv = new Map(process.argv.slice(2).map((a) => {
 }));
 
 const QUICK = argv.get('quick') === 'true';
+// Suffixes result filenames and engine labels, so a run on another machine can
+// be committed next to this one instead of overwriting it. F1b uses --tag=macos.
+const TAG = argv.get('tag') && argv.get('tag') !== 'true' ? String(argv.get('tag')) : '';
+const label = (engine) => (TAG ? `${engine}-${TAG}` : engine);
 const REPEATS = Number(argv.get('repeats') ?? (QUICK ? 2 : 3));
-const ENGINES = String(argv.get('engine') ?? 'chromium,webkitgtk').split(',').filter(Boolean);
+const ENGINES = String(argv.get('engine') ?? defaultEngines()).split(',').filter(Boolean);
 const WINDOW = { windowWidth: 1600, windowHeight: 1200 };
 
 const log = (msg) => process.stdout.write(`${msg}\n`);
@@ -37,7 +43,13 @@ const log = (msg) => process.stdout.write(`${msg}\n`);
 async function loadEngine(name) {
   if (name === 'chromium') return import('./engine-chromium.mjs');
   if (name === 'webkitgtk') return import('./engine-webkitgtk.mjs');
+  if (name === 'safaridriver') return import('./engine-safaridriver.mjs');
   throw new Error(`unknown engine ${name}`);
+}
+
+/** Linux defaults; on macOS the Blink proxy is still useful as a control. */
+function defaultEngines() {
+  return process.platform === 'darwin' ? 'chromium,safaridriver' : 'chromium,webkitgtk';
 }
 
 /** Pass criterion 1: page count deterministic per settings tuple. */
@@ -83,7 +95,11 @@ async function main() {
   log(`servers: ${servers.hostOrigin} (app) / ${servers.contentOrigin} (content)`);
   const hostUrl = `${servers.hostOrigin}/host.html?content=${encodeURIComponent(servers.contentOrigin)}`;
 
-  const summary = { generatedAt: new Date().toISOString(), repeats: REPEATS, quick: QUICK, engines: [] };
+  const summary = {
+    generatedAt: new Date().toISOString(),
+    platform: `${process.platform}-${process.arch}`,
+    repeats: REPEATS, quick: QUICK, tag: TAG || null, engines: [],
+  };
 
   for (const engineName of ENGINES) {
     log(`\n=== ${engineName} ===`);
@@ -93,12 +109,13 @@ async function main() {
       driver = await mod.launch(WINDOW);
     } catch (err) {
       log(`  launch failed: ${err.message}`);
-      summary.engines.push({ engine: engineName, launchError: err.message });
+      summary.engines.push({ engine: label(engineName), launchError: err.message });
       continue;
     }
 
     const out = {
-      engine: driver.name, family: driver.family, version: driver.version,
+      engine: label(driver.name), family: driver.family, version: driver.version,
+      platform: `${process.platform}-${process.arch}`,
       startedAt: new Date().toISOString(),
     };
 
@@ -156,14 +173,16 @@ async function main() {
       await driver.close().catch(() => {});
     }
 
-    await writeFile(join(RESULTS, `${engineName}.json`), JSON.stringify(out, null, 2));
+    await writeFile(join(RESULTS, `${label(engineName)}.json`), JSON.stringify(out, null, 2));
     summary.engines.push({
-      engine: engineName, family: out.family, version: out.version, fatal: out.fatal ?? null,
+      engine: label(engineName), family: out.family, version: out.version,
+      platform: out.platform, fatal: out.fatal ?? null,
     });
-    log(`  wrote results/${engineName}.json`);
+    log(`  wrote results/${label(engineName)}.json`);
   }
 
-  await writeFile(join(RESULTS, 'summary.json'), JSON.stringify(summary, null, 2));
+  await writeFile(join(RESULTS, `summary${TAG ? `-${TAG}` : ''}.json`),
+    JSON.stringify(summary, null, 2));
   servers.stop();
   log('\ndone');
 }

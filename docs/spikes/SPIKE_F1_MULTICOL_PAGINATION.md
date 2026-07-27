@@ -9,13 +9,20 @@ SPDX-License-Identifier: Apache-2.0
 |---|---|
 | Document | `SPIKE_F1_MULTICOL_PAGINATION.md` |
 | Spike ID | F1 |
-| Status | **Returned — criteria met, one qualified failure. D1 remains open.** |
-| Version | 1.0.0 |
+| Status | **Returned — criteria met, one qualified failure. D1 remains open pending F1b.** |
+| Version | 1.1.0 |
 | Date | 2026-07-27 |
-| Depends on | `FUTHARK_PROGRAM_SPEC.md` §6, §10, R1, R10, R13 |
-| Gates | ADR-F001 (provisional), ADR-F013 (provisional) |
+| Depends on | `FUTHARK_PROGRAM_SPEC.md` 0.5.0 — §6, §10, R1, R10, R13, R21, R22 |
+| Outcome | ADR-F013 accepted; ADR-F034, ADR-F035 written from these findings; R21 and Spike F1b raised |
 | Harness | `spikes/f1-multicol/` |
 | Raw results | `spikes/f1-multicol/results/REPORT.md` |
+
+> **Revision note (1.1.0).** Version 1.0.0 framed the uncovered WKWebView engine
+> as bearing on iOS, and pointed at D2 as the decision that would resolve its
+> weight. That was wrong. macOS Tauri uses WKWebView too, and macOS is in scope
+> for desktop v1, so resolving D2 against iOS leaves the gap exactly where it is.
+> The gap is now R21 in the spec and is closed by Spike F1b, not by D2. §3.1, §6
+> and §7 are corrected; no measurement changed.
 
 ---
 
@@ -56,9 +63,9 @@ deliver stable, position-preserving pagination via CSS multicol" — is not met.
 That condition was the trigger to reverse ADR-F001, and it did not fire.
 
 **D1 is still the human's decision.** F1 removes the reason to reverse ADR-F001;
-it does not by itself confirm it, because F1 could not touch WKWebView (§3) and
-because it produced one result that bears directly on the §6.5 re-weighting —
-see §6.
+it does not confirm it, because F1 could not touch WKWebView — which is macOS as
+well as iOS, and macOS is in scope for desktop v1. That gap is R21, and Spike F1b
+closes it. See §3.1 and §6.
 
 ---
 
@@ -78,26 +85,32 @@ MathML, and overlong unbreakable runs with preformatted blocks.
 
 ### 3.1 Engine coverage, and the gap
 
-| Target webview | Family | Covered | How |
-|---|---|---|---|
-| Linux — webkit2gtk-4.1 | WebKit | **directly** | WebKitGTK 2.50.4 via `WebKitWebDriver` |
-| Windows — WebView2 | Blink | by proxy | Chromium 141 |
-| Android System WebView | Blink | by proxy | Chromium 141 |
-| macOS / iOS — WKWebView | WebKit | **not covered** | inference from WebKitGTK only |
+| Target webview | Family | Platform | Covered | How |
+|---|---|---|---|---|
+| webkit2gtk-4.1 | WebKit | Linux desktop | **directly** | WebKitGTK 2.50.4 via `WebKitWebDriver` |
+| WebView2 | Blink | Windows desktop | by proxy | Chromium 141 |
+| Android System WebView | Blink | Android | by proxy | Chromium 141 |
+| WKWebView | WebKit | **macOS desktop** and iOS | **not covered** | — |
 
 The Linux target is measured directly rather than approximated: webkit2gtk-4.1 is
 the webview Tauri actually loads on Linux. The Blink proxy is sound — WebView2 and
 Android System WebView are Chromium's layout engine with different embedding.
 
-The real gap is WKWebView, which cannot be driven from Linux at all. WebKitGTK
-shares WebCore's fragmentation code with it, which is the code under test here, but
-not its text rasterisation or platform font stack. **Every Apple-platform claim
-below is inference.** Closing it needs one engine adapter file and a Mac; the
-scenarios need no changes.
+**The gap is WKWebView, and it is a desktop gap before it is a mobile one.**
+Tauri uses WKWebView on macOS as well as iOS. macOS is in scope for desktop v1
+(§1.1), so this hole does not close by deciding iOS is out — D2 has no bearing on
+it. WebKitGTK shares WebCore's fragmentation code with WKWebView, which is the
+code under test here, but not CoreText rasterisation or the platform font stack,
+and F1's numbers are sensitive to both: page counts fall out of line breaking.
+
+**Every claim about macOS or iOS below is inference from WebKitGTK.** This is
+R21 in the spec, and it is closed by Spike F1b, not by argument. The harness is
+engine-agnostic and `run/engine-safaridriver.mjs` is written and committed, so
+F1b is a run rather than a build — see §8.
 
 The spike's phrase "all three webview engines" is therefore answered as two of
-three directly, the third by family. That is a real limitation of this run, not a
-finding about the architecture.
+three directly, the third not at all. That is a limitation of this run on this
+hardware, not a finding about the architecture.
 
 ---
 
@@ -257,6 +270,12 @@ Book script is still stripped at ingest; the reader's script is added by the
 trusted Rust side on the way out. The two are distinguishable because they have
 different provenance, which is only true if injection happens in the handler.
 
+It does move the paginator into the same execution context as book content, which
+the spec now tracks as R22. The opaque origin still holds — hostile script reaches
+neither the app origin nor the IPC bridge — so the mitigation is on the receiving
+end: the Rust side validates reported offsets and page indices rather than
+trusting them, exactly as it would validate any other untrusted input.
+
 ### 5.4 Page counts are stable per engine and portable across none of them
 
 Across the 192 document/tuple pairs, Chromium and WebKitGTK agreed exactly 64
@@ -271,44 +290,57 @@ Spec 00 §6.3 already concedes this as Tauri's cost against Dioxus Native's
 byte-identical output, scoring rendering determinism 2 against 5. F1 confirms it
 with numbers and bounds it: the divergence is small and systematic, not erratic.
 
-**Consequence.** Anything user-visible that must agree across a user's devices —
-sync handoff, annotation anchoring, "you are 43% through" — has to be derived from
-locators or character offsets, never from page indices. §4.2 shows locators do
-this correctly at 100%.
+**Consequence — and it is smaller than the raw number suggests.** Position and
+annotations were never going to be page-based: ADR-F014 anchors on CFI, and §4.2
+measures that at 100% locator round-trip and 100% position preservation within an
+engine. So the divergence does not touch correctness. What it touches is the
+*displayed page number*, and ADR-F035 resolves that the way Kindle and Kobo
+already do — progress reported in device-independent locators, page numbers
+labelled as per-device.
+
+That converts most of the determinism penalty into a labelling decision, which is
+why this finding should **not** be fed into the §6.5 sensitivity re-weighting as
+though it were a fidelity failure. It is a real cost against Dioxus Native's
+byte-identical output, already priced into §6.3's score of 2; F1 measures its
+size rather than discovering a new one.
 
 ---
 
 ## 6. Recommendation
 
 **On ADR-F013 (CSS multicol with scroll-offset paging): confirm**, with the
-vertical writing mode exception from §5.1 written into the ADR text.
+vertical writing mode exception from §5.1 written into the ADR text. *(Accepted
+in spec 0.5.0, with ADR-F034 carrying the exception.)*
 
 **On ADR-F001 (Tauri 2): the gate does not fire.** F1 was the condition under
 which §6.5 said to reverse the recommendation, and F1 passed. Reversing on this
 evidence would not be justified.
 
-**D1 is not resolved by this document**, and should not be. Two things F1
-produced bear on it, and both are the human's to weigh:
+**D1 is not resolved by this document.** One thing blocks it, and it is factual
+rather than a judgement call: **WKWebView is unmeasured, and it is a desktop
+target.** ADR-F001 commits macOS to WKWebView, macOS is in v1, and F1 produced no
+evidence from that engine at all. Spike F1b answers it; until then D1 rests on
+inference for one of its three engines.
 
-1. **The WKWebView gap (§3.1).** ADR-F001's headline argument is cross-platform
-   reach including iOS, and iOS is the one target F1 could not measure. The
-   evidence for the platform the decision most depends on is inference.
-2. **§6.5 sensitivity condition 1** — "iOS drops from v1 and platform-identical
-   typography is elevated to a product requirement" — flips the weighted score to
-   Dioxus Native. §5.4 quantifies exactly what is given up, so that condition can
-   now be evaluated on numbers rather than on a prior. This is D2's territory, and
-   D2 is open.
+Two things that are *not* blockers, stated so they are not mistaken for them:
 
-What F1 does establish for D1 is that the *technical* objection is gone: the
-pagination mechanism works, the security model does not obstruct it, and position
-and selection survive. What remains is a product judgement about typographic
-portability and an untested platform, which is not a spike's to make.
+- **The 2.99% page-count divergence (§5.4)** is a display concern, resolved by
+  ADR-F035. It is already priced into §6.3's determinism score and should not be
+  re-litigated as though F1 discovered it.
+- **D2 (iOS in v1?)** does not gate the WKWebView question. It changes how much
+  the §6.5 re-weighting matters, but it cannot close R21, because dropping iOS
+  leaves macOS on the same engine.
+
+What F1 establishes for D1 is that the *technical* objection is gone on the two
+engine families it could reach: the pagination mechanism works, the security
+model does not obstruct it, and position and selection survive.
 
 ---
 
 ## 7. What F1 did not answer
 
-- **WKWebView on real Apple hardware.** §3.1.
+- **WKWebView on real Apple hardware — macOS first, iOS second.** §3.1, R21,
+  Spike F1b. This is the one gap that gates D1.
 - **Mobile performance and memory.** Layout cost was measured on desktop only.
   R9 (LMK/jetsam with a large book open) is untouched; the harness loads one
   spine item at a time, which is the mitigation, but never measured its cost on
@@ -332,10 +364,42 @@ portability and an untested platform, which is not a spike's to make.
 cd spikes/f1-multicol
 npm install
 npm run corpus
-npm run spike            # ~12 minutes, both engines
+npm run spike            # ~12 minutes; engines default by platform
 npm run report
 ```
 
 WebKitGTK needs `apt install webkit2gtk-driver xvfb`. Chromium comes from
 Playwright. Results land in `results/*.json`; `results/REPORT.md` is generated
 from them and contains no interpretation.
+
+### 8.1 Running F1b on macOS
+
+The WKWebView adapter is committed. On the MacBook Air, once:
+
+```bash
+safaridriver --enable    # admin prompt
+# Safari > Settings > Advanced > Show features for web developers
+# Safari > Develop > Allow Remote Automation
+```
+
+then:
+
+```bash
+npm run corpus
+node run/run.mjs --tag=macos          # chromium + safaridriver
+npm run report
+```
+
+`--tag` suffixes the output filenames, so the macOS results sit beside the Linux
+ones rather than overwriting them and `report.mjs` tabulates all four engines
+together. The Blink control on the same machine is deliberate: if
+`chromium-macos` matches `chromium` from Linux, then any WebKit-side difference
+is the engine rather than the hardware.
+
+**What safaridriver measures.** Safari and WKWebView on the same macOS build
+share the system WebKit — the same WebCore fragmentation code, the same CoreText
+rasterisation, the same fonts. That is the entire surface F1 exercises. What it
+does not share is process configuration and embedding: a Tauri WKWebView is
+created by the app with its own `WKWebViewConfiguration`. Nothing measured here
+is known to depend on that, but a safaridriver result that disagrees with
+WebKitGTK should be re-checked in a real Tauri shell before it is believed.
