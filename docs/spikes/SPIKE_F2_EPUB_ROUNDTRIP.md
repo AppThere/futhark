@@ -10,9 +10,9 @@ SPDX-License-Identifier: Apache-2.0
 | Document | `SPIKE_F2_EPUB_ROUNDTRIP.md` |
 | Spike ID | F2 |
 | Status | **Screening result returned on synthetic input. ADR-F011 reversed in spec 0.12.0 on this evidence. F2b instrument built; not yet run against real books.** |
-| Version | 0.3.1 |
+| Version | 0.4.0 |
 | Date | 2026-07-27 |
-| Depends on | `FUTHARK_PROGRAM_SPEC.md` 0.13.1 — §10, R5, ADR-F012, ADR-F036, ADR-F041, ADR-F047, ADR-F048, ADR-F050, ADR-F051, ADR-F052 |
+| Depends on | `FUTHARK_PROGRAM_SPEC.md` 0.15.0 — §10, R5, ADR-F012, ADR-F036, ADR-F041, ADR-F047, ADR-F048, ADR-F050—F056 |
 | Harness | `spikes/f2-epub-roundtrip/` |
 | Raw results | `f2-manifest.json`, regenerated per run |
 
@@ -208,8 +208,15 @@ namespace as `urn:oasis:names:tc:opendocument:xmlns:container`, so scanning for
 whitespace yields tokens that are never alphabetical, so `<p>the quick brown
 fox` scored as non-alphabetical attribute order. `Observed` is the state nothing
 downstream questions — it needs no disposition and goes straight into the
-requirements — which is what makes a false one expensive. Both are now
-regression tests.
+requirements — which is what makes a false one expensive.
+
+Both reached the right variant for the wrong reason, which is invisible to a
+reachability witness and is what ADR-F055 exists for. `tests/detectors.rs` pairs
+each of the 21 detectors with a true negative and asserts the **difference**:
+features `Observed` in the positive case minus those `Observed` in the negative
+must be exactly the one under test. An empty difference is the false-`Observed`
+shape; an extra element means the pair is not minimal. Re-introducing either bug
+fails the suite, in the empty-difference form both times.
 
 **ADR-F051 — the output is a floor, and the type is named one.** `FeatureFloor`
 exposes no requirements list. The only route to `Requirements` is `widen()`,

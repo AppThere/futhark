@@ -17,6 +17,16 @@
 //! reason, and the test asserts the list is exactly right. A gap that is counted
 //! is a different thing from a gap that is invisible, which is the same move as
 //! `FeatureState::NotCovered` one level up.
+//!
+//! ADR-F056 sorts those gaps by kind, because the response differs. `Tier` had
+//! a third variant, `Fixture`, that nothing constructed — *dead* rather than
+//! unwitnessed, and deleted rather than documented, since recording it here
+//! would have preserved the claim it could not support. Nothing in this file
+//! carries that kind; deletion is what its absence looks like.
+//!
+//! A witness is a floor on the type. It proves a variant can be produced, never
+//! that it is produced for its stated reason — that is ADR-F055's job, in
+//! `tests/detectors.rs`.
 
 use std::collections::BTreeSet;
 
@@ -79,35 +89,60 @@ fn every_feature_state_is_reachable_through_accumulate() {
 
 // --- Class ----------------------------------------------------------------
 
+/// Why a variant has no witness (ADR-F056). There is deliberately no `Dead`
+/// kind: a declared variant nothing constructs is deleted, and `Tier::Fixture`
+/// was.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Kind {
+    /// A witness is a contradiction in terms.
+    ByNature,
+    /// A witness would have to be invented, and would witness the invention.
+    WithoutFabrication,
+    /// The fixture writer structurally cannot produce it.
+    BeyondTheHarness,
+    /// Witnessable; nobody has written it. The response is to write it, not to
+    /// document it — this kind should shrink.
+    NotYetWritten,
+}
+
 /// Divergence classes the fixture corpus cannot produce, and why.
 ///
 /// Named rather than counted, so adding a fixture forces this list to shrink
 /// and a fixture that stops working forces it to grow. A bare "11 of 17
 /// covered" would move without anyone having to say what moved.
-const CLASS_NO_WITNESS: &[(&str, &str)] = &[
+const CLASS_NO_WITNESS: &[(&str, Kind, &str)] = &[
     (
         "timestamp",
+        Kind::BeyondTheHarness,
         "the fixture writer pins timestamps on purpose, so that every other \
          class is measured against a constant; the real run observes it",
     ),
     (
         "compression-level",
+        Kind::BeyondTheHarness,
         "requires two writers at different deflate levels, which the in-memory \
          fixture writer has no way to vary",
     ),
-    ("extra-field", "no fixture writes a zip extra field"),
+    (
+        "extra-field",
+        Kind::NotYetWritten,
+        "no fixture writes a zip extra field, and one could",
+    ),
     (
         "declared-size-mismatch",
+        Kind::NotYetWritten,
         "requires a container whose central directory lies about a size — a \
          hand-built malformed archive rather than a writer's output",
     ),
     (
         "manifest-mismatch",
+        Kind::NotYetWritten,
         "requires an OPF manifest disagreeing with the entries present; the \
          fixture base plan keeps them consistent",
     ),
     (
         "unclassified",
+        Kind::ByNature,
         "reachable only when the instrument meets a divergence it cannot name. \
          A fixture for it would be a fixture for the classifier's own blind \
          spot, which is a contradiction — this one is unwitnessed by nature, \
@@ -131,7 +166,7 @@ fn the_classes_without_a_fixture_witness_are_exactly_the_named_ones() {
         .map(|c| c.slug())
         .filter(|s| !reached.contains(s))
         .collect();
-    let declared: BTreeSet<&str> = CLASS_NO_WITNESS.iter().map(|(id, _)| *id).collect();
+    let declared: BTreeSet<&str> = CLASS_NO_WITNESS.iter().map(|(id, _, _)| *id).collect();
 
     assert_eq!(
         unreached, declared,
@@ -283,14 +318,16 @@ fn every_widening_gap_is_reachable_through_widen() {
 
 /// Reader outcomes with no witness, and why. Both are honest gaps rather than
 /// oversights, and neither can be closed by writing a better test.
-const OUTCOME_NO_WITNESS: &[(&str, &str)] = &[
+const OUTCOME_NO_WITNESS: &[(&str, Kind, &str)] = &[
     (
         "write-failed",
+        Kind::WithoutFabrication,
         "requires a book rbook parses but cannot serialise. No such input is \
          known, and one invented for the test would witness the invention",
     ),
     (
         "panicked",
+        Kind::WithoutFabrication,
         "requires an input that panics rbook's parser. Finding one is the \
          hostile-corpus work F2b's real run does; a synthetic panic would \
          witness `catch_unwind`, not the reader",
@@ -329,16 +366,35 @@ fn round_tripped_and_read_failed_have_witnesses_and_the_rest_are_named() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-// --- Tier -----------------------------------------------------------------
+// --- ADR-F056 ------------------------------------------------------------
 
-/// `Tier::Fixture` is declared and never constructed. The audit ADR-F053 asks
-/// for turned it up: a manifest reader would take the schema to mean that
-/// fixture-sourced records exist and can be told apart from Tier A ones, and
-/// none do. It is kept — the distinction is real and the fixture runs should
-/// carry it — but it is named here as unwitnessed rather than left to look
-/// like a tier nothing happened to hit yet.
 #[test]
-fn the_fixture_tier_has_no_witness_and_that_is_recorded() {
-    let r = record("x", false, Vec::new());
-    assert_eq!(r.tier, Tier::B);
+fn every_declared_gap_carries_a_kind_and_a_reason() {
+    for (id, _, why) in CLASS_NO_WITNESS.iter().chain(OUTCOME_NO_WITNESS) {
+        assert!(
+            !why.trim().is_empty(),
+            "{id} is recorded as unwitnessed with no reason, which is the \
+             silence it was meant to replace",
+        );
+    }
+}
+
+/// `NotYetWritten` is the only kind that should move. The other three describe
+/// the world; this one describes a to-do, and a list that never shrinks is a
+/// list nobody is reading. The assertion is on the count so that closing one
+/// forces the number down rather than letting the list quietly stay the size it
+/// was.
+#[test]
+fn the_writable_gaps_are_the_ones_still_outstanding() {
+    let outstanding: Vec<&str> = CLASS_NO_WITNESS
+        .iter()
+        .chain(OUTCOME_NO_WITNESS)
+        .filter(|(_, k, _)| *k == Kind::NotYetWritten)
+        .map(|(id, _, _)| *id)
+        .collect();
+    assert_eq!(
+        outstanding,
+        ["extra-field", "declared-size-mismatch", "manifest-mismatch"],
+        "write the fixture and shorten this list; do not reclassify the kind",
+    );
 }

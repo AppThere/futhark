@@ -104,14 +104,31 @@ manager's writer strips exactly the constructs being enumerated, so its silence
 is about the writer. That is ADR-F047's asymmetry applied to enumeration, and
 `CorpusProvenance::absence_is_evidence` is where it lives.
 
-Two detectors were reporting `Observed` off a substring rather than a construct,
-and both are now regression tests. Every EPUB declares the OCF namespace as
+Two detectors were reporting `Observed` off a substring rather than a construct.
+Every EPUB declares the OCF namespace as
 `urn:oasis:names:tc:opendocument:xmlns:container`, so a bare `xmlns:` scan
 reported an exotic namespace prefix in every book ever made; and prose split on
 whitespace yields "attribute names" that are never alphabetical, so
 `<p>the quick brown fox` scored as non-alphabetical attribute order. `Observed`
 is the state nothing downstream questions — it needs no disposition and goes
 straight into `must_preserve` — which is what makes a false one expensive.
+
+Both reached the right variant for the wrong reason, which no reachability
+witness can see. `tests/detectors.rs` is the answer (ADR-F055): each of the 21
+detectors is paired with a true negative, and the assertion is **differential**
+rather than one-sided — the set of features `Observed` in the positive case,
+minus those `Observed` in the negative, must be *exactly* the feature under
+test. An empty difference means the detector already fired on the negative,
+which is the shape both bugs had; an extra element means the pair is not
+minimal and proves nothing about specificity.
+
+The base container is the control, and it is deliberately realistic rather than
+minimal: it carries the OCF namespace URI, an XML declaration, a stored
+`mimetype`, and a sentence of prose — each of them something a detector has
+already mistaken for a construct. `the_base_container_observes_nothing` runs
+before any difference is computed, for the same reason `check-self-test` runs
+each check on the unperturbed tree first. Both bugs were re-introduced to
+confirm the test fails on them; both fail in the empty-difference form.
 
 ## Every variant needs a witness
 
@@ -232,7 +249,8 @@ extra one over-classification.
 | `src/characterise.rs` | F2b itself: walk, enumerate, emit the floor. |
 | `tests/catalogue.rs` | `NotCovered` is not `CheckedAndAbsent`, and stays non-empty. |
 | `tests/floor.rs` | A floor cannot become a specification without a reasoned widening. |
-| `tests/reachability.rs` | ADR-F053: every variant reached through the real code path, or named as lacking a witness. |
+| `tests/reachability.rs` | ADR-F053/F056: every variant reached through the real code path, or named as lacking a witness — sorted by kind. |
+| `tests/detectors.rs` | ADR-F055: every detector paired with a true negative. The assertion is differential, not one-sided. |
 | `tests/normalization.rs` | Both directions: the detector fires on rewritten files and stays silent on clean ones. |
 | `tests/verdict.rs` | A screening pass can never support adoption. |
 

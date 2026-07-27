@@ -56,6 +56,14 @@ pub struct Record {
 }
 
 /// Which corpus tier a record came from.
+///
+/// There was a third variant, `Fixture`. Nothing ever constructed it, and a
+/// reader of the manifest schema would have taken it as a promise that
+/// fixture-sourced records exist and can be told apart from Tier A ones. Under
+/// ADR-F056 that is *dead* rather than merely unwitnessed, and the response to
+/// dead is deletion — documenting it would have preserved exactly the claim it
+/// could not support. Fixture runs use `Tier::A`, which is what they are: files
+/// in the repository.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Tier {
@@ -63,8 +71,6 @@ pub enum Tier {
     A,
     /// The developer's own library. Never committed; referenced by hash.
     B,
-    /// Synthetic fixture, generated to validate the instrument.
-    Fixture,
 }
 
 impl Record {
