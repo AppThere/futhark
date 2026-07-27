@@ -1,0 +1,95 @@
+/* SPDX-FileCopyrightText: 2026 Kevin Carlson */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+/*
+ * Reader stylesheet for Spike F1. Injected into the content document by the
+ * resource server, after the author stylesheet, so pagination properties win
+ * without the reader having to !important its way over the book's typography.
+ *
+ * ADR-F013: paginated reflow is CSS multi-column with scroll-offset paging.
+ * The geometry trick is that column-gap equals twice the horizontal margin, so
+ * the stride (column-width + gap) equals the viewport width exactly and page N
+ * lives at scrollLeft = N * viewportWidth. No fractional-stride accumulation.
+ */
+
+:root {
+  --f1-page-w: 800px;
+  --f1-page-h: 1000px;
+  --f1-margin-h: 40px;
+  --f1-margin-v: 40px;
+  --f1-font-size: 16px;
+  --f1-line-height: 1.6;
+  --f1-font-family: Georgia, "Times New Roman", serif;
+}
+
+html {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  /* WebKit inflates text in narrow viewports unless this is off; it would make
+     page counts viewport-dependent in a way no setting explains. */
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+}
+
+body {
+  box-sizing: border-box;
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: var(--f1-margin-v) var(--f1-margin-h);
+
+  column-width: calc(var(--f1-page-w) - 2 * var(--f1-margin-h));
+  column-gap: calc(2 * var(--f1-margin-h));
+  column-fill: auto;
+
+  font-size: var(--f1-font-size);
+  line-height: var(--f1-line-height);
+  font-family: var(--f1-font-family);
+
+  /* Fragmentation quality. Not part of the pass criteria but a fair reader
+     would set these, and they change where breaks land. */
+  widows: 2;
+  orphans: 2;
+}
+
+/* Anything wider than the column box overflows it silently and the text is
+   simply gone off the page edge. Containment is the reader's job. */
+body img,
+body svg,
+body table,
+body pre,
+body video {
+  max-width: 100%;
+}
+
+body pre,
+body code {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+body .run {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* Headings that break across a column boundary read as corruption. */
+body h1,
+body h2,
+body h3 {
+  break-after: avoid-column;
+  break-inside: avoid-column;
+}
+
+body figure,
+body table {
+  break-inside: avoid-column;
+}
+
+/* Selection has to be visible for a human running the harness by hand. */
+::selection {
+  background: rgba(255, 210, 0, 0.55);
+}

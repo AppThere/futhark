@@ -94,9 +94,14 @@ futhark/
 │  └─ futhark-convert/    # Conversion: EPUB→KF8 compiler, CSS downconvert
 ├─ shell/                 # presentation shell — DO NOT POPULATE IN PHASE 0
 ├─ conformance/           # appthere-conformance suite
+├─ spikes/                # Phase 0 spike harnesses — throwaway, never depended on
 ├─ docs/                  # specs and ADRs
+│  └─ spikes/             # spike findings, one document per spike
 └─ patches/
 ```
+
+`spikes/` is outside the Cargo workspace on purpose. A spike answers one question
+and then becomes evidence; nothing in `crates/` may ever depend on one.
 
 Context names in the spec map one-to-one onto crate names. There is no translation step.
 

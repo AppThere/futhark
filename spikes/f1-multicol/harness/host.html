@@ -1,0 +1,28 @@
+<!--
+SPDX-FileCopyrightText: 2026 Kevin Carlson
+SPDX-License-Identifier: Apache-2.0
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Futhark Spike F1 — multicol pagination harness</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #23262b; font: 13px/1.4 system-ui, sans-serif;
+               color: #d6d9de; height: 100%; overflow: hidden; }
+  #stage { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+  #bar { padding: 6px 10px; background: #171a1e; border-bottom: 1px solid #333; }
+  #bar code { color: #8fc7ff; }
+  #frame-wrap { display: grid; place-items: center; overflow: hidden; }
+  /* The frame is sized by the driver; the white plate is the page. */
+  iframe { border: 0; background: #fff; display: block; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bar">Spike F1 host origin — <code id="status">idle</code></div>
+  <div id="frame-wrap"><iframe id="content" sandbox="allow-scripts" title="book content"></iframe></div>
+</div>
+<script src="host.js"></script>
+</body>
+</html>

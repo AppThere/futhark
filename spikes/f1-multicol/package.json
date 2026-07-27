@@ -1,0 +1,17 @@
+{
+  "name": "futhark-spike-f1-multicol",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Spike F1: CSS multicol pagination in a sandboxed iframe, measured across webview engines.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "corpus": "node corpus/build-corpus.mjs",
+    "serve": "node harness/serve.mjs",
+    "spike": "node run/run.mjs",
+    "report": "node run/report.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.56.1"
+  }
+}

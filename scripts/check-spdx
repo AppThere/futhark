@@ -25,9 +25,28 @@ check() {
     fi
 }
 
-while IFS= read -r -d '' f; do check "$f"; done < <(
-    find . \( -name '*.rs' -o -name 'Cargo.toml' -o -name '*.sh' \) \
-         -not -path './target/*' -not -path './.git/*' -type f -print0)
+# The set to check is "everything that is or will be in the repository": tracked
+# files plus untracked ones that .gitignore does not exclude. Walking the working
+# tree instead would pull in vendored dependencies — spike harnesses have a
+# node_modules — and demand Apache headers on other people's code.
+candidates() {
+    if git rev-parse --git-dir >/dev/null 2>&1; then
+        git ls-files -z --cached --others --exclude-standard
+    else
+        find . \( -name '*.rs' -o -name 'Cargo.toml' -o -name '*.sh' \) \
+             -not -path './target/*' -not -path './.git/*' \
+             -not -path '*/node_modules/*' -type f -print0
+    fi
+}
+
+while IFS= read -r -d '' f; do
+    case "$f" in
+        *.rs|*/Cargo.toml|Cargo.toml|*.sh) ;;
+        *) continue ;;
+    esac
+    [ -f "$f" ] || continue
+    check "$f"
+done < <(candidates)
 
 [ "$fail" -eq 0 ] || { echo "" >&2; echo "SPDX header check failed." >&2; exit 1; }
 echo "spdx: ok"
