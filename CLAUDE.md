@@ -130,6 +130,10 @@ ask it explicitly rather than waiting to notice it: **for every pass, green resu
 count — what else could produce this exact signal?** Prefer a distinguishable failure over a
 silent one, and make the ambiguous case its own reportable state (ADR-F042).
 
+Encoding a distinction as a type does not exempt it: a declared variant nothing can reach is
+documentation wearing a type's clothes. Every variant needs a witness reached through the real
+code path, and every check needs an input that makes it fail (ADR-F053, ADR-F054).
+
 ## Commands
 
 ```bash
@@ -142,6 +146,7 @@ cargo deny check            # license + advisory audit
 ./scripts/check-spdx        # header presence and ordering
 ./scripts/check-layering    # no shell deps in domain crates (ADR-F002)
 ./scripts/check-adr-numbers # duplicate/ambiguous ADR identifiers
+./scripts/check-self-test   # every check above rejects a negative case (ADR-F054)
 ```
 
 ---

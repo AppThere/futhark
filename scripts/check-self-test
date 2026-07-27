@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Kevin Carlson
+# SPDX-License-Identifier: Apache-2.0
+#
+# ADR-F054: every repository check carries a negative test.
+# A check never observed to fail is indistinguishable from one that stopped
+# looking. Each case below perturbs a scratch copy of the tree so that exactly
+# one check should fail, and asserts that it does.
+set -uo pipefail
+
+TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+fail=0
+
+# The control. Without it a green line means only "exited non-zero", and a
+# scratch tree the copy step never assembled — a missing layering.toml, a spec
+# that was not copied — makes the check die on a missing file and score as
+# rejecting its negative case. A check that fails for the wrong reason is the
+# shape this repository keeps finding; the harness for it should not have it.
+# Running clean first turns each result into a differential: passes clean,
+# fails dirty.
+expect_pass() {
+    local name="$1"; shift
+    if "$@" >/dev/null 2>&1; then
+        return 0
+    fi
+    printf 'SELF-TEST FAIL: %s failed on the *unperturbed* scratch tree, so its\n' "$name" >&2
+    printf '                negative case proves nothing. Output was:\n' >&2
+    "$@" 2>&1 | sed 's/^/                /' >&2
+    fail=1
+    return 1
+}
+
+expect_fail() {
+    local name="$1"; shift
+    if "$@" >/dev/null 2>&1; then
+        printf 'SELF-TEST FAIL: %s passed on input that must fail it\n' "$name" >&2
+        fail=1
+    else
+        printf '  ok  %s passes clean, rejects its negative case\n' "$name"
+    fi
+}
+
+for c in check-line-limit check-spdx check-layering check-adr-numbers; do
+    rm -rf "$TMP/w"; mkdir -p "$TMP/w"
+    cp -r crates scripts layering.toml "$TMP/w/" 2>/dev/null
+    mkdir -p "$TMP/w/docs"; cp docs/FUTHARK_PROGRAM_SPEC.md "$TMP/w/docs/" 2>/dev/null
+    expect_pass "$c" env -C "$TMP/w" "./scripts/$c" || continue
+    case "$c" in
+      check-line-limit)
+        python3 -c "
+import pathlib
+p = pathlib.Path('$TMP/w/crates/futhark-core/src/lib.rs')
+p.write_text(p.read_text() + '\n'.join('// pad %d' % i for i in range(400)))" ;;
+      check-spdx)
+        printf 'pub fn x() {}\n' > "$TMP/w/crates/futhark-core/src/naked.rs" ;;
+      check-layering)
+        python3 -c "
+import pathlib
+p = pathlib.Path('$TMP/w/crates/futhark-doc/Cargo.toml')
+p.write_text(p.read_text().replace('thiserror.workspace = true',
+                                   'thiserror.workspace = true\ntauri = \"2\"'))" ;;
+      check-adr-numbers)
+        python3 -c "
+import pathlib, re
+p = pathlib.Path('$TMP/w/docs/FUTHARK_PROGRAM_SPEC.md')
+t = p.read_text()
+p.write_text(t.replace('**ADR-F054**', '**ADR-F053**', 1))" ;;
+    esac
+    expect_fail "$c" env -C "$TMP/w" "./scripts/$c"
+done
+
+if [ "$fail" -ne 0 ]; then
+    echo "" >&2
+    echo "A check that cannot be made to fail is not a check (ADR-F054)." >&2
+    exit 1
+fi
+echo "self-test: ok (4 checks pass clean and reject their negative cases)"

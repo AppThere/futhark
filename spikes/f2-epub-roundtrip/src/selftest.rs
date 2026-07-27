@@ -71,7 +71,11 @@ fn describe(classes: &[Class]) -> String {
 
 /// Read an in-memory container by way of a temp file, since the zip reader
 /// wants a seekable source and the fixtures live in memory.
-fn read_bytes(bytes: &[u8]) -> Result<Archive> {
+///
+/// Public so `tests/reachability.rs` can drive the fixtures through the same
+/// path the self-test uses. ADR-F053 wants witnesses reached through the real
+/// code path; a test that built its own reader would be witnessing itself.
+pub fn read_bytes(bytes: &[u8]) -> Result<Archive> {
     let mut path = std::env::temp_dir();
     path.push(format!("f2-{:x}.zip", fnv(bytes)));
     std::fs::write(&path, bytes).map_err(|e| F2Error::Io {

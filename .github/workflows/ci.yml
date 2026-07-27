@@ -23,6 +23,7 @@ jobs:
       - run: ./scripts/check-spdx
       - run: ./scripts/check-layering
       - run: ./scripts/check-adr-numbers
+      - run: ./scripts/check-self-test   # ADR-F054: the checks must be falsifiable
 
   fmt:
     name: Format

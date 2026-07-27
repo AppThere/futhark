@@ -113,6 +113,38 @@ whitespace yields "attribute names" that are never alphabetical, so
 is the state nothing downstream questions — it needs no disposition and goes
 straight into `must_preserve` — which is what makes a false one expensive.
 
+## Every variant needs a witness
+
+ADR-F053, and it came out of a bug in this crate. `FeatureState` declared three
+states and reached two — `accumulate` used `or_insert`, which could never
+promote `NotCovered` to `CheckedAndAbsent`, so a working detector and an absent
+one produced the same state. Every test passed throughout. Encoding the
+distinction as a type was not enough: an unreachable variant is documentation
+wearing a type's clothes, and inherits every weakness this project has been
+encoding *away* from documentation.
+
+`tests/reachability.rs` reaches each variant through the real path —
+`accumulate`, `judge`, `classify`, `roundtrip`, `widen` — never by constructing
+it, since a directly-constructed variant witnesses the `enum` keyword.
+
+The audit found three genuine gaps, and they are named rather than counted:
+
+- **Six divergence classes have no fixture** — `timestamp` (the fixture writer
+  pins timestamps on purpose so every other class is measured against a
+  constant), `compression-level`, `extra-field`, `declared-size-mismatch`,
+  `manifest-mismatch`, and `unclassified`. The last is unwitnessable by nature:
+  a fixture for it would be a fixture for the classifier's own blind spot. The
+  test asserts the unreached set equals the declared set exactly, so the gap
+  cannot change size quietly in either direction.
+- **`Outcome::WriteFailed` and `Outcome::Panicked` have no witness.** Both need
+  an input that defeats `rbook` in a specific way, and one invented for the test
+  would witness the invention rather than the reader. `ReadFailed` does have one
+  — hostile bytes, refused, and `produced_output()` false, so an absent output
+  is never scored as zero divergences.
+- **`Tier::Fixture` is declared and never constructed.** A manifest reader would
+  take the schema to mean fixture-sourced records exist and can be told from
+  Tier A ones. None do.
+
 ## The taxonomy is frozen
 
 `src/taxonomy.rs` is the calibration, frozen 2026-07-27 at classifier version
@@ -200,6 +232,7 @@ extra one over-classification.
 | `src/characterise.rs` | F2b itself: walk, enumerate, emit the floor. |
 | `tests/catalogue.rs` | `NotCovered` is not `CheckedAndAbsent`, and stays non-empty. |
 | `tests/floor.rs` | A floor cannot become a specification without a reasoned widening. |
+| `tests/reachability.rs` | ADR-F053: every variant reached through the real code path, or named as lacking a witness. |
 | `tests/normalization.rs` | Both directions: the detector fires on rewritten files and stays silent on clean ones. |
 | `tests/verdict.rs` | A screening pass can never support adoption. |
 
