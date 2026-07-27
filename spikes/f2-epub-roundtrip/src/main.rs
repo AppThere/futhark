@@ -21,6 +21,7 @@ use futhark_f2::archive::Archive;
 use futhark_f2::classify::classify;
 use futhark_f2::error::{F2Error, Result};
 use futhark_f2::manifest::{Manifest, Record, Tier};
+use futhark_f2::normalization;
 use futhark_f2::producer::read_package;
 use futhark_f2::taxonomy::CLASSIFIER_VERSION;
 use futhark_f2::{fixtures, taxonomy::Class};
@@ -182,6 +183,7 @@ fn scan(args: &[String]) -> Result<bool> {
             // Tier B paths are the developer's filesystem and are not published.
             path: matches!(tier, Tier::A).then(|| path.display().to_string()),
             producer: pkg.producer,
+            normalized_by: normalization::detect(&source, Some(&path)).labels(),
             epub_version: pkg.version,
             entry_count: source.entries.len(),
             // No round-trip yet: the reader under test is ADR-F011's open
@@ -194,6 +196,14 @@ fn scan(args: &[String]) -> Result<bool> {
 
     let summary = manifest.summary();
     print!("{}", summary.render());
+    if summary.total > 0 && summary.distinct_unnormalized_producers < 2 {
+        println!(
+            "\nR27: this corpus has {} distinct producer(s) among un-normalized\n\
+             files. Whatever the overall producer count says, it is measuring one\n\
+             writer. Prefer files that have not been through a library manager.",
+            summary.distinct_unnormalized_producers,
+        );
+    }
     std::fs::write("f2-manifest.json", serde_json::to_string_pretty(&manifest)?).map_err(|e| {
         F2Error::Io {
             path: "f2-manifest.json".into(),

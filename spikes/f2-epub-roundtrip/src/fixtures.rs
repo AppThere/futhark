@@ -132,6 +132,20 @@ fn mutate(mut plans: Vec<Plan>, name: &str, f: impl Fn(&mut Plan)) -> Vec<Plan> 
     plans
 }
 
+/// Build a container whose OPF is the given text, for exercising detectors that
+/// read the package document (normalization, producer extraction).
+pub fn container_with_opf(opf: &str) -> Result<Vec<u8>> {
+    let plans = mutate(base_plan(), "OEBPS/package.opf", |p| {
+        p.body = opf.as_bytes().to_vec();
+    });
+    build(&plans, None)
+}
+
+/// The base container, unmodified: a file no manager has touched.
+pub fn clean_container() -> Result<Vec<u8>> {
+    build(&base_plan(), None)
+}
+
 /// Every fixture. Each asserts exactly one class.
 pub fn all() -> Result<Vec<Fixture>> {
     let base = build(&base_plan(), None)?;

@@ -30,8 +30,24 @@ cargo run -- scan ~/Books --tier=b  # manifest a corpus: hashes and producers
 ```
 
 `scan` is the Tier B entry point and writes `f2-manifest.json`. It records
-hashes, producer strings, EPUB versions, and divergence classes — never content,
-never Tier B paths — which is what makes the manifest publishable (ADR-F038).
+hashes, producer strings, normalization signals, EPUB versions, and divergence
+classes — never content, never Tier B paths — which is what makes the manifest
+publishable (ADR-F038).
+
+**Run `scan` before committing to a corpus.** It answers R27, which is the
+sharpest threat to F2's validity: a producer string is self-reported and gets
+overwritten, so a library curated with calibre reports calibre as the producer of
+everything it has touched, erasing the toolchain that actually built each file.
+Such a corpus can show healthy producer diversity while measuring one writer —
+the failure D12's gate exists to prevent, wearing the gate's own passing signal.
+
+`scan` therefore reports two producer counts: one over all files, and one over
+files carrying **no** normalization evidence. Only the second is D12's gate
+(ADR-F046). Normalization is detected independently of the producer string —
+`calibre:*` meta names, `Sigil version`, contributor fields naming a manager,
+`META-INF/calibre_bookmarks.txt`, and sidecar `metadata.opf` / `cover.jpg` in the
+same directory — and the run warns outright when the un-normalized population has
+fewer than two distinct producers.
 
 ## The taxonomy is frozen
 
@@ -44,6 +60,13 @@ never Tier B paths — which is what makes the manifest publishable (ADR-F038).
 | **B — container metadata** | `entry-order`, `timestamp`, `compression-method`, `compression-level`, `extra-field`, `comment` | no |
 | **C — declared vs actual** | `mimetype-not-first`, `mimetype-compressed`, `declared-size-mismatch`, `manifest-mismatch` | no |
 | **U** | `unclassified` | **yes** |
+
+The same shape recurs in the normalization detector, and its negative test
+earned its place on the first run: a book titled *Mastering calibre: a guide*
+contains the literal string `calibre:` and was flagged until detection was
+anchored to the attribute position. A detector that fires on everything cannot
+separate the populations it exists to separate — which is why "stays silent on a
+clean file" is a test rather than an assumption.
 
 Two properties are load-bearing and both are enforced by tests:
 
@@ -86,9 +109,9 @@ extra one over-classification.
    proxy-denied (D7).
 2. **The round-trip stage** — read with `rbook`, write back, feed both to
    `classify`. This is where ADR-F011 gets its answer.
-3. **The D12 coverage gate** — `scan` already reports the producer distribution,
-   so the corpus can be judged on distinct producers rather than file count
-   before a single round-trip is run.
+3. **The D12 coverage gate** — `scan` already reports both producer
+   distributions, so the corpus can be judged on distinct *un-normalized*
+   producers before a single round-trip is run.
 
 ## Layout
 
@@ -98,10 +121,12 @@ extra one over-classification.
 | `src/classify.rs` | Two archives in, classified divergences out. Never counts. |
 | `src/archive.rs` | Reads a container into a comparable model, storage metadata included. |
 | `src/xmlcmp.rs` | Infoset comparison, for telling canonicalisation from content loss. |
-| `src/producer.rs` | Producer string and OPF facts, for D12's coverage gate. |
+| `src/producer.rs` | Producer string and OPF facts. |
+| `src/normalization.rs` | R27: was this file rewritten by a manager? Detected without the producer string. |
 | `src/manifest.rs` | The publishable artifact (ADR-F038). Carries no book bytes. |
 | `src/fixtures.rs` | One known class per fixture. How the instrument is validated. |
 | `tests/instrument.rs` | Runs the fixtures in CI so drift fails the build. |
+| `tests/normalization.rs` | Both directions: the detector fires on rewritten files and stays silent on clean ones. |
 
 Spike code: outside the Cargo workspace (note the empty `[workspace]` table in
 `Cargo.toml`), and nothing in `crates/` may depend on it.

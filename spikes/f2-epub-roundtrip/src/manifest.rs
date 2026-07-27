@@ -32,7 +32,14 @@ pub struct Record {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
     /// Producer string as declared by the package, if any (D12).
+    ///
+    /// Self-reported and overwritable. Read it together with `normalized_by`:
+    /// on a rewritten file this names the last tool to touch it, not the
+    /// toolchain that built it (R27).
     pub producer: Option<String>,
+    /// Evidence the file was rewritten by a manager, detected independently of
+    /// the producer string (ADR-F046). Empty means no evidence found.
+    pub normalized_by: Vec<String>,
     /// EPUB version declared in the OPF, if readable.
     pub epub_version: Option<String>,
     /// Number of archive entries in the source.
@@ -56,6 +63,13 @@ pub enum Tier {
 }
 
 impl Record {
+    /// Whether this file shows evidence of having been rewritten by a manager.
+    /// Only un-normalized files carry a trustworthy producer string, so only
+    /// they count toward D12's diversity gate.
+    pub fn normalized(&self) -> bool {
+        !self.normalized_by.is_empty()
+    }
+
     /// Whether this book round-tripped losslessly in the sense ADR-F012 means.
     pub fn lossless(&self) -> bool {
         !self
@@ -103,6 +117,8 @@ impl Manifest {
             .map(|c| (c.slug().to_owned(), 0))
             .collect();
         let mut producers: BTreeMap<String, usize> = BTreeMap::new();
+        let mut unnormalized_producers: BTreeMap<String, usize> = BTreeMap::new();
+        let mut signals: BTreeMap<String, usize> = BTreeMap::new();
 
         for r in &self.records {
             for c in r.classes() {
@@ -112,7 +128,14 @@ impl Manifest {
                 .producer
                 .clone()
                 .unwrap_or_else(|| "(undeclared)".to_owned());
-            *producers.entry(p).or_insert(0) += 1;
+            *producers.entry(p.clone()).or_insert(0) += 1;
+            if r.normalized() {
+                for sig in &r.normalized_by {
+                    *signals.entry(sig.clone()).or_insert(0) += 1;
+                }
+            } else {
+                *unnormalized_producers.entry(p).or_insert(0) += 1;
+            }
         }
 
         let total = self.records.len();
@@ -134,8 +157,14 @@ impl Manifest {
                 (lossless as f64 / total as f64) * 100.0
             },
             distinct_producers: producers.len(),
+            normalized: self.records.iter().filter(|r| r.normalized()).count(),
+            // The number D12's gate actually reads. Producer strings on
+            // rewritten files name the manager, not the original toolchain.
+            distinct_unnormalized_producers: unnormalized_producers.len(),
             by_class,
             producers,
+            unnormalized_producers,
+            normalization_signals: signals,
         }
     }
 }
@@ -159,12 +188,22 @@ pub struct Summary {
     pub entry_content_failures: usize,
     /// Lossless share, the number F2's ≥99% criterion is read against.
     pub lossless_pct: f64,
-    /// Distinct producer strings. D12 gates on this, not on file count.
+    /// Distinct producer strings across every file. Read with care: on a
+    /// normalized corpus this counts managers, not toolchains (R27).
     pub distinct_producers: usize,
+    /// Files carrying at least one normalization signal.
+    pub normalized: usize,
+    /// Distinct producers among files with *no* normalization signal. **This is
+    /// the number D12's coverage gate reads** (ADR-F046).
+    pub distinct_unnormalized_producers: usize,
     /// Occurrences per class, every class present.
     pub by_class: BTreeMap<String, usize>,
-    /// Books per producer.
+    /// Books per producer, all files.
     pub producers: BTreeMap<String, usize>,
+    /// Books per producer, un-normalized files only.
+    pub unnormalized_producers: BTreeMap<String, usize>,
+    /// How often each normalization signal fired.
+    pub normalization_signals: BTreeMap<String, usize>,
 }
 
 impl Summary {
@@ -173,14 +212,28 @@ impl Summary {
         let mut s = String::new();
         s.push_str(&format!(
             "books: {}  lossless: {} ({:.2}%)  entry-content failures: {}\n\
-             container-only divergence: {}  distinct producers: {}\n\n",
+             container-only divergence: {}\n\
+             normalized (rewritten by a manager): {} of {}\n\
+             distinct producers: {} overall, {} among un-normalized files\n\n",
             self.total,
             self.lossless,
             self.lossless_pct,
             self.entry_content_failures,
             self.container_only,
+            self.normalized,
+            self.total,
             self.distinct_producers,
+            self.distinct_unnormalized_producers,
         ));
+        if self.normalized > 0 {
+            s.push_str(
+                "normalization signals (R27 — these files' producer strings name the manager):\n",
+            );
+            for (sig, n) in &self.normalization_signals {
+                s.push_str(&format!("  {n:>4}  {sig}\n"));
+            }
+            s.push('\n');
+        }
         s.push_str("divergence classes (books affected):\n");
         for c in Class::ALL {
             let n = self.by_class.get(c.slug()).copied().unwrap_or(0);
@@ -192,8 +245,19 @@ impl Summary {
             };
             s.push_str(&format!("  {group}  {:<24} {n}\n", c.slug()));
         }
-        s.push_str("\nproducers:\n");
+        s.push_str("\nproducers (all files):\n");
         for (p, n) in &self.producers {
+            s.push_str(&format!("  {n:>4}  {p}\n"));
+        }
+        s.push_str("\nproducers among un-normalized files — D12's gate reads this:\n");
+        if self.unnormalized_producers.is_empty() {
+            s.push_str(
+                "  (none — every file shows normalization evidence, so this\n\
+                       \x20  corpus measures one writer regardless of what the\n\
+                       \x20  producer strings above say)\n",
+            );
+        }
+        for (p, n) in &self.unnormalized_producers {
             s.push_str(&format!("  {n:>4}  {p}\n"));
         }
         s

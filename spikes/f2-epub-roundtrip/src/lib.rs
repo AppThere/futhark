@@ -23,6 +23,7 @@ pub mod classify;
 pub mod error;
 pub mod fixtures;
 pub mod manifest;
+pub mod normalization;
 pub mod producer;
 pub mod taxonomy;
 pub mod xmlcmp;

@@ -33,7 +33,12 @@ const log = (m) => process.stdout.write(`${m}\n`);
 const loadEngine = (n) => import(`../../f1-multicol/run/engine-${n}.mjs`);
 
 /**
- * Each case declares the outcome the CSP *requires*, per the specification.
+ * Each case declares the outcome the CSP *requires*, per the specification —
+ * not the outcome the engines agree on. That distinction is ADR-F045: agreement
+ * is not evidence of correctness, and the `'none'`-with-a-host cases are the
+ * existence proof, since both engines resolve them permissively and no
+ * cross-engine comparison could ever have surfaced it.
+ *
  * `allow` and `deny` are assertions; `either` records without judging, for
  * cases where the standard genuinely does not pin the answer.
  *
